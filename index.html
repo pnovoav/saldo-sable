@@ -28,6 +28,9 @@
   .app-head h1{font-size:21px;margin:0;letter-spacing:.2px;color:#ffffff;font-weight:700}
   .app-head p{margin:3px 0 0;font-size:12.5px;color:rgba(255,255,255,.68);letter-spacing:.2px}
   .app-head .spacer{flex:1}
+  .who{color:rgba(255,255,255,.7);font-size:12.5px;font-weight:600;white-space:nowrap}
+  .logout-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:600;font-size:12.5px;padding:8px 14px;border-radius:9px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .logout-btn:hover{background:rgba(255,255,255,.22)}
   .brand-badge{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#fff;
     background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.32);padding:6px 12px;border-radius:999px;white-space:nowrap}
 
@@ -388,6 +391,9 @@ c-24 24 -25 27 -22 162 3 135 3 138 28 150 19 10 183 13 737 13 633 0 713 2
       <h1>Saldo Diario Disponible</h1>
       <p>Reporte de tesorería · Grupo Sable</p>
     </div>
+    <div class="spacer"></div>
+    <span class="who" id="whoLabel"></span>
+    <button id="logoutBtn" class="logout-btn" type="button">Cerrar sesión</button>
   </div>
 
   <div class="tabs">
@@ -501,7 +507,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     if(res && res.ok){ AUTH_KEY=pp; CURUSER=u; ROLE=res.role||"viewer"; localStorage.setItem("sable_key",pp); localStorage.setItem("sable_user",u); localStorage.setItem("sable_role",ROLE); $("#authErr").style.display="none"; applyRole(); await bootCloud(); }
     else { $("#authErr").style.display="block"; }
   }
-  function applyRole(){ document.body.classList.toggle("viewer", ROLE!=="editor"); }
+  function applyRole(){ document.body.classList.toggle("viewer", ROLE!=="editor"); const w=$("#whoLabel"); if(w) w.textContent = CURUSER + (ROLE==="editor"?"":" · solo lectura"); }
+  function logout(){ ["sable_key","sable_user","sable_role"].forEach(k=>localStorage.removeItem(k)); location.reload(); }
 
   const $ = s => document.querySelector(s);
   const clp = n => (n<0?"-":"") + "$" + Math.round(Math.abs(n)).toLocaleString("es-CL");
@@ -1013,6 +1020,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   }));
   // ===== Arranque con login =====
   $("#authBtn").addEventListener("click", doLogin);
+  $("#logoutBtn").addEventListener("click", logout);
   $("#authPass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
   (async function(){
     const k=localStorage.getItem("sable_key"), u=localStorage.getItem("sable_user");
