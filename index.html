@@ -323,7 +323,7 @@ c-24 24 -25 27 -22 162 3 135 3 138 28 150 19 10 183 13 737 13 633 0 713 2
 127 -52 12 c-59 14 -1763 22 -1799 9z"/>
 </g></svg>
     <div class="auth-title">Saldo Diario · Grupo Sable</div>
-    <input id="authUser" placeholder="Usuario" value="Admin" autocomplete="username">
+    <input id="authUser" placeholder="Usuario" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
     <input id="authPass" type="password" placeholder="Contraseña" autocomplete="current-password">
     <button id="authBtn" type="button">Ingresar →</button>
     <div id="authErr" class="auth-err">Usuario o clave incorrectos</div>
@@ -1024,7 +1024,6 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   $("#authPass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
   (async function(){
     const k=localStorage.getItem("sable_key"), u=localStorage.getItem("sable_user");
-    if(u) $("#authUser").value=u;
     if(k && u){
       const res=await cloudLogin(u,k);
       if(res && res.ok){ AUTH_KEY=k; CURUSER=u; ROLE=res.role||"viewer"; localStorage.setItem("sable_role",ROLE); applyRole(); await bootCloud(); return; }
