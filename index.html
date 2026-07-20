@@ -433,7 +433,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   function scheduleSaveObs(){ if(obsSaveTimer) clearTimeout(obsSaveTimer); obsSaveTimer=setTimeout(cloudSaveObs, 1200); }
   function cloudFlash(msg, err){ const el=$("#cloudFlash"); if(!el) return; el.textContent=msg; el.className="cloud-flash show"+(err?" err":""); clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove("show"), 2200); }
   async function bootCloud(){
-    try{ const d=await cloudGet(); DEBT_DATA=d.deuda||{loans:[]}; OBS=d.observaciones||{}; document.body.classList.add("authed"); renderDeuda(); }
+    try{ const d=await cloudGet(); DEBT_DATA=d.deuda||{loans:[]}; OBS=d.observaciones||{}; document.body.classList.add("authed"); renderDeuda(); loadSaldosFromCloud(d.saldos); }
     catch(e){ localStorage.removeItem("sable_key"); document.body.classList.remove("authed"); const pw=$("#authPass"); if(pw) pw.focus(); }
   }
   async function doLogin(){
@@ -574,8 +574,33 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       if(!ORDER.length){ alert("No encontré hojas con la tabla de saldos en este Excel."); return; }
       buildSelectors();
       render();
+      cloudSaveSaldos();
     };
     reader.readAsArrayBuffer(file);
+  }
+
+  // ===== Saldos en la nube (fase 2) =====
+  function serializeSaldos(){
+    const sheets={};
+    Object.keys(SHEETS).forEach(k=>{ const s=SHEETS[k]; sheets[k]={label:s.label,dolar:s.dolar,week:s.week,companies:s.companies,grandTotal:s.grandTotal,accounts:s.accounts}; });
+    return {order:ORDER.slice(), sheets:sheets, savedAt:(SHEETS[ORDER[0]]?SHEETS[ORDER[0]].label:"")};
+  }
+  async function cloudSaveSaldos(){
+    if(!AUTH_KEY) return;
+    try{ await fetch(WORKER_URL+"/data",{method:"POST",headers:{"Authorization":"Bearer "+AUTH_KEY,"Content-Type":"application/json"},body:JSON.stringify({saldos:serializeSaldos()})}); cloudFlash("Saldos guardados en la nube"); }
+    catch(e){ cloudFlash("No se pudieron guardar los saldos", true); }
+  }
+  function loadSaldosFromCloud(saldos){
+    if(!saldos || !saldos.order || !saldos.sheets || !saldos.order.length) return false;
+    SHEETS={};
+    Object.keys(saldos.sheets).forEach(k=>{ const s=saldos.sheets[k]; s.dateObj=parseDate(s.label); SHEETS[k]=s; });
+    ORDER = saldos.order.filter(k=>SHEETS[k]);
+    if(!ORDER.length) return false;
+    buildSelectors(); render();
+    $("#drop").classList.add("hidden");
+    $("#lbName").textContent = "☁ Datos cargados desde la nube";
+    $("#loadedBar").classList.remove("hidden");
+    return true;
   }
 
   function buildSelectors(){
