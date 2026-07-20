@@ -207,6 +207,16 @@
     .m-body{padding:6px 14px 18px}
     table.detail{font-size:11.5px}
     table.detail td{padding:6px}
+    /* modales (detalle banco / amortización) como tarjetas en celular */
+    .m-body table.detail{display:block}
+    .m-body table.detail thead{display:none}
+    .m-body table.detail tbody{display:block}
+    .m-body table.detail tr{display:block;padding:10px 12px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px}
+    .m-body table.detail tr.amort-paid{background:#eef7f1;border-color:#cfe8d8}
+    .m-body table.detail td{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:3px 0;border:none;text-align:right;white-space:normal;font-size:12.5px}
+    .m-body table.detail td::before{content:attr(data-label);color:var(--muted);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;text-align:left;flex:none}
+    .m-body table.detail td.l{font-weight:700;color:var(--navy);text-align:left}
+    .m-body table.detail tr.amort-paid td.l{color:var(--green)}
 
     /* ---------- Tablas principales como TARJETAS en celular ---------- */
     #tableCard, #deudaCard{overflow:visible}
@@ -834,11 +844,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         const lcTxt    = a.lcdisp ? clpPlain(a.lcdisp) : "—";
         const curTag   = isUSD ? '<span class="cur-tag cur-usd">USD</span>' : '<span class="cur-tag cur-clp">CLP</span>';
         return `<tr>
-          <td class="l">${a.acct || "—"}${curTag}</td>
-          <td>${saldoTxt}</td>
-          <td>${ffmmTxt}</td>
-          <td>${lcTxt}</td>
-          <td><b>${clpPlain(clpEq)}</b></td>
+          <td class="l" data-label="Cuenta">${a.acct || "—"}${curTag}</td>
+          <td data-label="Saldo">${saldoTxt}</td>
+          <td data-label="FFMM/DAP">${ffmmTxt}</td>
+          <td data-label="LC Disp.">${lcTxt}</td>
+          <td data-label="Total CLP"><b>${clpPlain(clpEq)}</b></td>
         </tr>`;
       }).join("");
       grand += bankSub;
@@ -977,14 +987,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       const paid = c.f<=asOf;
       if(paid){ capPag+=c.cap; totPag+=c.tot; nPag++; }
       return `<tr class="${paid?'amort-paid':''}">
-        <td>${c.n}</td>
-        <td class="l">${fmtISO(c.f)}</td>
-        <td>${clpPlain(c.cap)}</td>
-        <td>${clpPlain(c.int)}</td>
-        ${hasCom?`<td>${c.com?clpPlain(c.com):'—'}</td>`:''}
-        <td><b>${clpPlain(c.tot)}</b></td>
-        <td>${clpPlain(bruto-acumCap)}</td>
-        <td><span class="estado ${paid?'e-pag':'e-pend'}">${paid?'Pagada':'Pendiente'}</span></td>
+        <td data-label="N° cuota">${c.n}</td>
+        <td class="l" data-label="Vencimiento">${fmtISO(c.f)}</td>
+        <td data-label="Capital">${clpPlain(c.cap)}</td>
+        <td data-label="Interés">${clpPlain(c.int)}</td>
+        ${hasCom?`<td data-label="Comisión">${c.com?clpPlain(c.com):'—'}</td>`:''}
+        <td data-label="Cuota total"><b>${clpPlain(c.tot)}</b></td>
+        <td data-label="Saldo capital">${clpPlain(bruto-acumCap)}</td>
+        <td data-label="Estado"><span class="estado ${paid?'e-pag':'e-pend'}">${paid?'Pagada':'Pendiente'}</span></td>
       </tr>`;
     }).join("");
     const saldo=bruto-capPag;
