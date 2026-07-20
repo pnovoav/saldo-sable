@@ -257,6 +257,9 @@
   .cloud-flash{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);z-index:120;background:var(--navy);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;box-shadow:0 8px 30px rgba(20,28,54,.4)}
   .cloud-flash.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .cloud-flash.err{background:var(--red)}
+  /* rol solo-lectura (viewer): sin subir/cambiar archivo */
+  body.viewer #drop, body.viewer #lbChange, body.viewer #placeholder{display:none!important}
+  body.viewer .lb-file:after{content:" · solo lectura";color:var(--muted);font-weight:600}
 </style>
 </head>
 <body>
@@ -416,18 +419,19 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   "use strict";
   // ===== Cloud (Worker privado) =====
   const WORKER_URL = "https://saldo-sable.pnovoav.workers.dev";
-  let AUTH_KEY = null, OBS = {}, obsSaveTimer = null;
+  let AUTH_KEY = null, OBS = {}, obsSaveTimer = null, ROLE = null, CURUSER = "";
   async function cloudLogin(user, pass){
-    try{ const r=await fetch(WORKER_URL+"/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user,pass})}); return r.ok; }
-    catch(e){ return false; }
+    try{ const r=await fetch(WORKER_URL+"/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user,pass})}); if(!r.ok) return null; return await r.json(); }
+    catch(e){ return null; }
   }
   async function cloudGet(){
-    const r=await fetch(WORKER_URL+"/data",{headers:{"Authorization":"Bearer "+AUTH_KEY}});
+    const r=await fetch(WORKER_URL+"/data",{headers:{"Authorization":"Bearer "+AUTH_KEY,"X-User":CURUSER}});
     if(!r.ok) throw new Error("HTTP "+r.status);
     return r.json();
   }
   async function cloudSaveObs(){
-    try{ await fetch(WORKER_URL+"/data",{method:"POST",headers:{"Authorization":"Bearer "+AUTH_KEY,"Content-Type":"application/json"},body:JSON.stringify({observaciones:OBS})}); cloudFlash("Observaciones guardadas"); }
+    if(ROLE!=="editor") return;
+    try{ await fetch(WORKER_URL+"/data",{method:"POST",headers:{"Authorization":"Bearer "+AUTH_KEY,"Content-Type":"application/json","X-User":CURUSER},body:JSON.stringify({observaciones:OBS})}); cloudFlash("Observaciones guardadas"); }
     catch(e){ cloudFlash("No se pudo guardar", true); }
   }
   function scheduleSaveObs(){ if(obsSaveTimer) clearTimeout(obsSaveTimer); obsSaveTimer=setTimeout(cloudSaveObs, 1200); }
@@ -439,11 +443,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   async function doLogin(){
     const u=$("#authUser").value.trim(), pp=$("#authPass").value, btn=$("#authBtn");
     btn.disabled=true; btn.textContent="Verificando…";
-    const ok=await cloudLogin(u,pp);
+    const res=await cloudLogin(u,pp);
     btn.disabled=false; btn.textContent="Ingresar →";
-    if(ok){ AUTH_KEY=pp; localStorage.setItem("sable_key",pp); localStorage.setItem("sable_user",u); $("#authErr").style.display="none"; await bootCloud(); }
+    if(res && res.ok){ AUTH_KEY=pp; CURUSER=u; ROLE=res.role||"viewer"; localStorage.setItem("sable_key",pp); localStorage.setItem("sable_user",u); localStorage.setItem("sable_role",ROLE); $("#authErr").style.display="none"; applyRole(); await bootCloud(); }
     else { $("#authErr").style.display="block"; }
   }
+  function applyRole(){ document.body.classList.toggle("viewer", ROLE!=="editor"); }
 
   const $ = s => document.querySelector(s);
   const clp = n => (n<0?"-":"") + "$" + Math.round(Math.abs(n)).toLocaleString("es-CL");
@@ -586,8 +591,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     return {order:ORDER.slice(), sheets:sheets, savedAt:(SHEETS[ORDER[0]]?SHEETS[ORDER[0]].label:"")};
   }
   async function cloudSaveSaldos(){
-    if(!AUTH_KEY) return;
-    try{ await fetch(WORKER_URL+"/data",{method:"POST",headers:{"Authorization":"Bearer "+AUTH_KEY,"Content-Type":"application/json"},body:JSON.stringify({saldos:serializeSaldos()})}); cloudFlash("Saldos guardados en la nube"); }
+    if(!AUTH_KEY || ROLE!=="editor") return;
+    try{ await fetch(WORKER_URL+"/data",{method:"POST",headers:{"Authorization":"Bearer "+AUTH_KEY,"Content-Type":"application/json","X-User":CURUSER},body:JSON.stringify({saldos:serializeSaldos()})}); cloudFlash("Saldos guardados en la nube"); }
     catch(e){ cloudFlash("No se pudieron guardar los saldos", true); }
   }
   function loadSaldosFromCloud(saldos){
@@ -688,7 +693,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         <td data-label="Var.%" class="pct ${pos?'pos':'neg'}" style="background:transparent">${pos?'+':''}${r.pctv.toFixed(1)}%</td>
         <td data-label="Tendencia"><div class="bar-wrap"><div class="bar ${pos?'pos':'neg'}" style="width:${barW}"></div></div></td>
         <td data-label="Observaciones">${consecutivo
-          ? `<div class="${obsCls}" contenteditable="true" spellcheck="false" data-key="${obsKey(cKey,r.name).replace(/"/g,'&quot;')}">${savedObs}</div>`
+          ? `<div class="${obsCls}" ${ROLE==="editor"?'contenteditable="true"':''} spellcheck="false" data-key="${obsKey(cKey,r.name).replace(/"/g,'&quot;')}">${savedObs}</div>`
           : `<span class="obs-off">—</span>`}</td>
       </tr>`;
     }).join("");
@@ -956,10 +961,15 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   // ===== Arranque con login =====
   $("#authBtn").addEventListener("click", doLogin);
   $("#authPass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
-  (function(){
+  (async function(){
     const k=localStorage.getItem("sable_key"), u=localStorage.getItem("sable_user");
     if(u) $("#authUser").value=u;
-    if(k){ AUTH_KEY=k; bootCloud(); } else { const pw=$("#authPass"); if(pw) pw.focus(); }
+    if(k && u){
+      const res=await cloudLogin(u,k);
+      if(res && res.ok){ AUTH_KEY=k; CURUSER=u; ROLE=res.role||"viewer"; localStorage.setItem("sable_role",ROLE); applyRole(); await bootCloud(); return; }
+      localStorage.removeItem("sable_key");
+    }
+    const pw=$("#authPass"); if(pw) pw.focus();
   })();
 })();
 </script>
