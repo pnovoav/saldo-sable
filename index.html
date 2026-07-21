@@ -299,6 +299,14 @@
   .deuda-svg .cxl{fill:var(--muted);font-size:12px;text-anchor:middle}
   .chart-cap{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5}
   .chart-cap b{color:var(--navy)} .cnow-lab{color:#c02b3f;font-weight:600}
+  .cash-svg{width:100%;height:auto;display:block;overflow:visible}
+  .cash-svg .c-area{fill:url(#cashGrad)}
+  .cash-svg .c-line{fill:none;stroke:#2C1096;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+  .cash-svg .c-dot{fill:#2C1096;stroke:#fff;stroke-width:2}
+  .cash-svg .c-grid{stroke:#eef0f6;stroke-width:1}
+  .cash-svg .c-xl{fill:var(--muted);font-size:10.5px;text-anchor:middle}
+  .cash-svg .c-yl{fill:var(--muted);font-size:11px}
+  .cash-svg .c-lastlab{fill:#2C1096;font-size:11.5px;font-weight:700;text-anchor:end}
   .prox-title{font-size:11.5px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 4px}
   .prox-list{display:flex;flex-direction:column}
   .prox-row{display:flex;align-items:center;gap:12px;padding:8px 2px;border-bottom:1px solid #f0f2f7;font-size:13px}
@@ -444,6 +452,7 @@ c-24 24 -25 27 -22 162 3 135 3 138 28 150 19 10 183 13 737 13 633 0 713 2
   <div class="tabs">
     <button class="tab active" type="button" data-tab="saldos">Saldos Diarios</button>
     <button class="tab" type="button" data-tab="deuda">Deuda</button>
+    <button class="tab" type="button" data-tab="dashboard">Dashboard</button>
   </div>
 
   <div id="panelSaldos" class="panel">
@@ -486,6 +495,12 @@ c-24 24 -25 27 -22 162 3 135 3 138 28 150 19 10 183 13 737 13 633 0 713 2
     <div id="deudaCard" class="card"></div>
     <div id="deudaFootNote" class="foot-note"></div>
   </div><!-- /panelDeuda -->
+
+  <div id="panelDashboard" class="panel hidden">
+    <div id="dashCashChart" class="card chart-card hidden"></div>
+    <div id="dashDeuda" class="card chart-card hidden"></div>
+    <div id="dashEmpty" class="empty card">Carga el Excel del día para ver la evolución de caja ✨</div>
+  </div><!-- /panelDashboard -->
 
   <div class="brand-foot"><b>Grupo Sable</b> · Documento confidencial de uso interno</div>
 </div>
@@ -988,8 +1003,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const items=cts.map(c=>({label:c.f.slice(8,10), sub:c.emp, cap:c.cap,int:c.int,tot:c.tot,drill:null}));
     return {items, level:"day", drillable:false, title:_MES[+m-1]+" "+y+" · por día"};
   }
-  function renderDeudaChart(){
-    const el=$("#deudaChart"); if(!el) return;
+  let deudaChartTarget="#deudaChart";
+  function renderDeudaChart(sel){
+    if(sel) deudaChartTarget=sel;
+    const el=$(deudaChartTarget); if(!el) return;
     if(!DEBT_DATA||!DEBT_DATA.loans){ el.classList.add("hidden"); return; }
     const b=deudaBuckets();
     if(!b.items.length){ el.classList.add("hidden"); return; }
@@ -1059,7 +1076,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         <div class="k-sub">capital que aún se debe</div></div>`;
 
     deudaView={level:"year",year:null,month:null};
-    renderDeudaChart();
+    renderDeudaChart("#deudaChart");
 
     const body = loans.map(x=>{
       const l=x.loan, st=x.st;
@@ -1132,6 +1149,65 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     $("#mClose").addEventListener("click", closeDetail);
   }
 
+  // ===== Dashboard: evolución de caja histórica =====
+  function renderCashChart(){
+    const el=$("#dashCashChart"); if(!el) return;
+    const keys=ORDER.slice().reverse();   // cronológico: más antiguo → más reciente
+    if(keys.length<2){ el.classList.add("hidden"); return; }
+    const pts=keys.map(k=>({label:SHEETS[k].label, v:SHEETS[k].grandTotal||0}));
+    const clpM=v=>"$"+Math.round(v/1e6).toLocaleString("es-CL")+"M";
+    const n=pts.length;
+    const W=760,H=232,padL=8,padR=66,padT=20,padB=34;
+    const maxV=Math.max(...pts.map(p=>p.v)), minV=Math.min(...pts.map(p=>p.v));
+    // zoom al rango de datos (con headroom) para que se vea la variación; eje etiquetado con valores reales
+    const rng=maxV-minV, pad=rng>0?rng*0.18:Math.abs(maxV)*0.05||1;
+    const lo=Math.max(0, minV-pad), hi=maxV+pad, span=(hi-lo)||1;
+    const X=i=> padL + (n===1?0:i*(W-padL-padR)/(n-1));
+    const Y=v=> padT + (1-(v-lo)/span)*(H-padT-padB);
+    const baseY=H-padB;
+    // grilla horizontal (3 niveles) + etiquetas Y
+    let grid="", yl="";
+    [maxV,(maxV+lo)/2,lo].forEach(v=>{ const y=Y(v);
+      grid+=`<line class="c-grid" x1="${padL}" y1="${y.toFixed(1)}" x2="${(W-padR).toFixed(1)}" y2="${y.toFixed(1)}"/>`;
+      yl+=`<text x="${(W-padR+6).toFixed(1)}" y="${(y+3).toFixed(1)}" class="c-yl">${clpM(v)}</text>`;
+    });
+    // línea + área
+    let dLine="";
+    pts.forEach((p,i)=>{ dLine+=(i?"L":"M")+X(i).toFixed(1)+" "+Y(p.v).toFixed(1)+" "; });
+    const dArea = dLine + `L${X(n-1).toFixed(1)} ${baseY.toFixed(1)} L${X(0).toFixed(1)} ${baseY.toFixed(1)} Z`;
+    // etiquetas X (primera, última y ~6 repartidas)
+    const step=Math.max(1,Math.ceil(n/6));
+    let xlab="";
+    pts.forEach((p,i)=>{ if(i%step===0 || i===n-1){ xlab+=`<text x="${X(i).toFixed(1)}" y="${(H-12).toFixed(1)}" class="c-xl">${p.label.slice(0,5)}</text>`; } });
+    // punto final destacado + valor
+    const last=pts[n-1], lx=X(n-1), ly=Y(last.v);
+    const dot=`<circle class="c-dot" cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="4"/>`+
+      `<text x="${(lx-8).toFixed(1)}" y="${(ly-8).toFixed(1)}" class="c-lastlab">${clpM(last.v)}</text>`;
+    // caption
+    const first=pts[0].v, delta=last.v-first, pctd=first? delta/Math.abs(first)*100 : 0;
+    const cap=`Del <b>${pts[0].label}</b> al <b>${last.label}</b> (${n} días). `+
+      `Variación del período: <b>${delta>=0?'+':''}${clp(delta)}</b> (${delta>=0?'+':''}${pctd.toFixed(1)}%). `+
+      `Máximo <b>${clp(maxV)}</b> · mínimo <b>${clp(minV)}</b>.`;
+    el.classList.remove("hidden");
+    el.innerHTML=`
+      <div class="chart-title">Evolución de caja histórica <span>· saldo total disponible por día</span></div>
+      <svg viewBox="0 0 ${W} ${H}" class="cash-svg">
+        <defs><linearGradient id="cashGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#2C1096" stop-opacity="0.22"/>
+          <stop offset="1" stop-color="#2C1096" stop-opacity="0.02"/>
+        </linearGradient></defs>
+        ${grid}<path class="c-area" d="${dArea}"/><path class="c-line" d="${dLine}"/>${dot}${yl}${xlab}
+      </svg>
+      <div class="chart-cap">${cap}</div>`;
+  }
+  function renderDashboard(){
+    const hasData = ORDER && ORDER.length>=1;
+    $("#dashEmpty").classList.toggle("hidden", !!hasData);
+    renderCashChart();
+    deudaView={level:"year",year:null,month:null};
+    renderDeudaChart("#dashDeuda");
+  }
+
   // conmutador de pestañas
   document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click", ()=>{
     document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
@@ -1139,7 +1215,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const tab=t.dataset.tab;
     $("#panelSaldos").classList.toggle("hidden", tab!=="saldos");
     $("#panelDeuda").classList.toggle("hidden", tab!=="deuda");
+    $("#panelDashboard").classList.toggle("hidden", tab!=="dashboard");
     if(tab==="deuda") renderDeuda();
+    if(tab==="dashboard") renderDashboard();
   }));
   // ===== Arranque con login =====
   $("#authBtn").addEventListener("click", doLogin);
