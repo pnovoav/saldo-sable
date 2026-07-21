@@ -994,10 +994,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const yl=`<text x="${W-padR+6}" y="${(Y(maxPay)+10).toFixed(1)}" class="cyl">${clpM(maxPay)}</text><text x="${W-padR+6}" y="${(baseY).toFixed(1)}" class="cyl">$0</text>`;
     let sep=""; if(dropIdx>=0){ const dx=(padL+dropIdx*slot).toFixed(1); sep=`<line x1="${dx}" y1="${padT}" x2="${dx}" y2="${baseY}" class="csep"/>`; }
     const cap = (dropIdx>=0
-      ? `Sales ≈<b>${clp(heavy)}/mes</b> en cuotas. Desde <b>${mlab(pts[dropIdx].y,pts[dropIdx].m)}</b> baja a ≈<b>${clp(lightLevel)}/mes</b>${finishNames.length?` — terminan ${finishNames.join(" y ")}`:""}.`
-      : `Sales ≈<b>${clp(heavy)}/mes</b> en cuotas de deuda.`).replace(/\.\.$/,".");
+      ? `El pago mensual de cuotas asciende a ≈<b>${clp(heavy)}</b>. A partir de <b>${mlab(pts[dropIdx].y,pts[dropIdx].m)}</b> disminuye a ≈<b>${clp(lightLevel)}</b> mensuales${finishNames.length?`, tras finalizar los créditos de ${finishNames.join(" y ")}`:""}.`
+      : `El pago mensual de cuotas asciende a ≈<b>${clp(heavy)}</b>.`).replace(/\.\.$/,".");
     el.classList.remove("hidden");
-    el.innerHTML=`<div class="chart-title">Pago mensual de deuda <span>· cuotas que salen por mes</span></div>
+    el.innerHTML=`<div class="chart-title">Servicio de deuda mensual <span>· pago de cuotas por mes</span></div>
       <svg viewBox="0 0 ${W} ${H}" class="deuda-svg">${sep}${bars}${yl}${xlab}</svg>
       <div class="chart-cap">${cap}</div>`;
   }
