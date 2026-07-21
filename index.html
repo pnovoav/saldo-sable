@@ -288,6 +288,15 @@
   .deuda-svg .cxl{fill:var(--muted);font-size:12px;text-anchor:middle}
   .chart-cap{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5}
   .chart-cap b{color:var(--navy)} .cnow-lab{color:#c02b3f;font-weight:600}
+  .prox-title{font-size:11.5px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 4px}
+  .prox-list{display:flex;flex-direction:column}
+  .prox-row{display:flex;align-items:center;gap:12px;padding:8px 2px;border-bottom:1px solid #f0f2f7;font-size:13px}
+  .prox-row:last-child{border-bottom:none}
+  .prox-date{font-weight:700;color:var(--navy);white-space:nowrap;min-width:92px}
+  .prox-emp{flex:1;color:var(--ink);font-weight:600;line-height:1.2}
+  .prox-emp small{display:block;color:var(--muted);font-weight:500;font-size:11px}
+  .prox-amt{font-weight:700;color:var(--navy);white-space:nowrap}
+  .prox-empty{color:var(--muted);font-size:13px;padding:8px 0}
 </style>
 </head>
 <body>
@@ -946,60 +955,59 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     return {otorgado:bruto, pagado:capPag, saldo:bruto-capPag, totPagado:totPag, nPag:nPag};
   }
 
-  // ===== Gráfico evolución de la deuda (saldo insoluto en el tiempo) =====
-  function deudaSeries(){
-    if(!DEBT_DATA || !DEBT_DATA.loans) return null;
-    const all=[];
-    DEBT_DATA.loans.forEach(l=>{ (l.cuotas||[]).forEach(c=>all.push({f:c.f, cap:c.cap})); });
+  // ===== Deuda: mini-curva 12 meses + próximos vencimientos =====
+  function deudaSeries12(asOf){
+    if(!DEBT_DATA||!DEBT_DATA.loans) return null;
+    const all=[]; DEBT_DATA.loans.forEach(l=>(l.cuotas||[]).forEach(c=>all.push({f:c.f,cap:c.cap})));
     if(all.length<2) return null;
     all.sort((a,b)=> a.f<b.f?-1:(a.f>b.f?1:0));
     const bruto=all.reduce((x,c)=>x+c.cap,0);
-    const first=all[0].f, last=all[all.length-1].f;
-    let yy=+first.slice(0,4), mm=+first.slice(5,7);
-    let sy=yy, sm=mm-1; if(sm<1){sm=12;sy--;}
-    const pts=[{d:sy+"-"+String(sm).padStart(2,"0"), saldo:bruto}];
-    const endY=+last.slice(0,4), endM=+last.slice(5,7);
-    let g=0;
-    while((yy<endY || (yy===endY && mm<=endM)) && g++<300){
+    let yy=+asOf.slice(0,4), mm=+asOf.slice(5,7);
+    const pts=[];
+    for(let k=0;k<=12;k++){
       const d=yy+"-"+String(mm).padStart(2,"0")+"-31";
       let paid=0; for(const c of all){ if(c.f<=d) paid+=c.cap; else break; }
-      pts.push({d:yy+"-"+String(mm).padStart(2,"0"), saldo:Math.max(0,bruto-paid)});
+      pts.push({y:yy,m:mm,saldo:Math.max(0,bruto-paid)});
       mm++; if(mm>12){mm=1;yy++;}
     }
-    return {pts:pts, bruto:bruto};
+    return pts;
+  }
+  function proxVencimientos(asOf, lim){
+    const list=[];
+    (DEBT_DATA.loans||[]).forEach(l=>{ (l.cuotas||[]).forEach(c=>{ if(c.f>asOf) list.push({f:c.f, emp:l.empresa, det:(l.detalle||"").split(" · ")[0], monto:c.tot}); }); });
+    list.sort((a,b)=> a.f<b.f?-1:(a.f>b.f?1:0));
+    return list.slice(0, lim||6);
   }
   function renderDeudaChart(){
     const el=$("#deudaChart"); if(!el) return;
-    const s=deudaSeries();
-    if(!s){ el.classList.add("hidden"); return; }
+    if(!DEBT_DATA || !DEBT_DATA.loans){ el.classList.add("hidden"); return; }
+    const asOf=debtAsOf();
+    const MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+    const mlab=(y,m)=>MES[m-1]+" '"+String(y).slice(2);
+    const cMi=v=>"$"+Math.round(v/1e6).toLocaleString("es-CL")+"M";
+    // mini-curva 12 meses (rango ajustado para ver la pendiente)
+    const pts=deudaSeries12(asOf);
+    let svg="";
+    if(pts && pts.length>1){
+      const n=pts.length,W=760,H=118,padL=6,padR=52,padT=12,padB=20;
+      const vals=pts.map(p=>p.saldo), vmax=Math.max(...vals), vmin=Math.min(...vals), span=(vmax-vmin)||1;
+      const X=i=>padL+i*(W-padL-padR)/(n-1);
+      const Y=v=>padT+(1-(v-vmin)/span)*(H-padT-padB);
+      const line=pts.map((p,i)=>(i?"L":"M")+X(i).toFixed(1)+" "+Y(p.saldo).toFixed(1)).join(" ");
+      const area="M"+X(0).toFixed(1)+" "+(H-padB)+" "+pts.map((p,i)=>"L"+X(i).toFixed(1)+" "+Y(p.saldo).toFixed(1)).join(" ")+" L"+X(n-1).toFixed(1)+" "+(H-padB)+" Z";
+      let xlab=""; pts.forEach((p,i)=>{ if(i%3===0) xlab+=`<text x="${X(i).toFixed(1)}" y="${H-6}" class="cxl">${mlab(p.y,p.m)}</text>`; });
+      const yl=`<text x="${W-padR+6}" y="${(Y(vmax)+4).toFixed(1)}" class="cyl">${cMi(vmax)}</text><text x="${W-padR+6}" y="${(Y(vmin)+4).toFixed(1)}" class="cyl">${cMi(vmin)}</text>`;
+      svg=`<svg viewBox="0 0 ${W} ${H}" class="deuda-svg"><defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2C1096" stop-opacity="0.22"/><stop offset="1" stop-color="#2C1096" stop-opacity="0.02"/></linearGradient></defs><path d="${area}" fill="url(#dg)"/><path d="${line}" class="cline"/><circle cx="${X(0).toFixed(1)}" cy="${Y(pts[0].saldo).toFixed(1)}" r="3.8" class="cdot"/>${yl}${xlab}</svg>`;
+    }
+    // próximos vencimientos
+    const prox=proxVencimientos(asOf,6);
+    const rows=prox.length ? prox.map(v=>`<div class="prox-row"><span class="prox-date">${fmtISO(v.f)}</span><span class="prox-emp">${v.emp}<small>${v.det}</small></span><span class="prox-amt">${clp(v.monto)}</span></div>`).join("") : `<div class="prox-empty">Sin vencimientos próximos</div>`;
     el.classList.remove("hidden");
-    const pts=s.pts, n=pts.length, maxY=s.bruto||1;
-    const W=760,H=230,padL=6,padR=54,padT=16,padB=26;
-    const X=i=> padL + i*(W-padL-padR)/(n-1);
-    const Y=v=> padT + (1 - v/maxY)*(H-padT-padB);
-    const line = pts.map((p,i)=>(i?"L":"M")+X(i).toFixed(1)+" "+Y(p.saldo).toFixed(1)).join(" ");
-    const area = "M"+X(0).toFixed(1)+" "+Y(0).toFixed(1)+" "+pts.map((p,i)=>"L"+X(i).toFixed(1)+" "+Y(p.saldo).toFixed(1)).join(" ")+" L"+X(n-1).toFixed(1)+" "+Y(0).toFixed(1)+" Z";
-    const asOf = debtAsOf();
-    let hi = pts.findIndex(p=>p.d>=asOf.slice(0,7)); if(hi<0) hi=n-1;
-    const hSaldo = DEBT_DATA.loans.reduce((a,l)=>a+debtStatus(l,asOf).saldo,0);
-    const cM = v => "$"+Math.round(v/1e6).toLocaleString("es-CL")+"M";
-    const yticks=[0,maxY/2,maxY].map(v=>`<line x1="${padL}" y1="${Y(v).toFixed(1)}" x2="${W-padR}" y2="${Y(v).toFixed(1)}" class="cg"/><text x="${W-padR+6}" y="${(Y(v)+4).toFixed(1)}" class="cyl">${cM(v)}</text>`).join("");
-    let xlab="", prevY="";
-    pts.forEach((p,i)=>{ const yr=p.d.slice(0,4); if(yr!==prevY){ prevY=yr; xlab+=`<text x="${X(i).toFixed(1)}" y="${H-7}" class="cxl">${yr}</text>`; } });
-    const finMes = pts[n-1].d.split("-").reverse().join("-");
     el.innerHTML = `
-      <div class="chart-title">Evolución de la deuda <span>· saldo insoluto en el tiempo</span></div>
-      <svg viewBox="0 0 ${W} ${H}" class="deuda-svg">
-        <defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#2C1096" stop-opacity="0.26"/><stop offset="1" stop-color="#2C1096" stop-opacity="0.02"/></linearGradient></defs>
-        ${yticks}
-        <path d="${area}" fill="url(#dg)"/>
-        <path d="${line}" class="cline"/>
-        <line x1="${X(hi).toFixed(1)}" y1="${padT}" x2="${X(hi).toFixed(1)}" y2="${H-padB}" class="cnow"/>
-        <circle cx="${X(hi).toFixed(1)}" cy="${Y(hSaldo).toFixed(1)}" r="4.5" class="cdot"/>
-        ${xlab}
-      </svg>
-      <div class="chart-cap"><span class="cnow-lab">● Al ${fmtISO(debtAsOf())}: <b>${clp(hSaldo)}</b></span> · la deuda llega a $0 en ${finMes}</div>`;
+      <div class="chart-title">Deuda · saldo insoluto <span>· próximos 12 meses</span></div>
+      ${svg}
+      <div class="prox-title">Próximos vencimientos</div>
+      <div class="prox-list">${rows}</div>`;
   }
   function renderDeuda(){
     if(!DEBT_DATA || !DEBT_DATA.loans){ const dc=$("#deudaCard"); if(dc) dc.innerHTML='<div class="empty-d" style="padding:24px">Cargando deuda…</div>'; return; }
