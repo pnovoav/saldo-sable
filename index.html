@@ -333,7 +333,7 @@ c-24 24 -25 27 -22 162 3 135 3 138 28 150 19 10 183 13 737 13 633 0 713 2
 127 -52 12 c-59 14 -1763 22 -1799 9z"/>
 </g></svg>
     <div class="auth-title">Saldo Diario · Grupo Sable</div>
-    <input id="authUser" placeholder="Usuario" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
+    <input id="authUser" placeholder="Usuario" autocomplete="off" autocapitalize="off" spellcheck="false">
     <input id="authPass" type="password" placeholder="Contraseña" autocomplete="current-password">
     <button id="authBtn" type="button">Ingresar →</button>
     <div id="authErr" class="auth-err">Usuario o clave incorrectos</div>
@@ -510,12 +510,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     catch(e){ localStorage.removeItem("sable_key"); document.body.classList.remove("authed"); const pw=$("#authPass"); if(pw) pw.focus(); }
   }
   async function doLogin(){
-    const u=$("#authUser").value.trim(), pp=$("#authPass").value, btn=$("#authBtn");
+    const u=$("#authUser").value.trim(), pp=$("#authPass").value, btn=$("#authBtn"), err=$("#authErr");
+    if(!u || !pp){ err.textContent="Ingresa usuario y contraseña"; err.style.display="block"; return; }
     btn.disabled=true; btn.textContent="Verificando…";
     const res=await cloudLogin(u,pp);
     btn.disabled=false; btn.textContent="Ingresar →";
-    if(res && res.ok){ AUTH_KEY=pp; CURUSER=u; ROLE=res.role||"viewer"; localStorage.setItem("sable_key",pp); localStorage.setItem("sable_user",u); localStorage.setItem("sable_role",ROLE); $("#authErr").style.display="none"; applyRole(); await bootCloud(); }
-    else { $("#authErr").style.display="block"; }
+    if(res && res.ok){ AUTH_KEY=pp; CURUSER=u; ROLE=res.role||"viewer"; localStorage.setItem("sable_key",pp); localStorage.setItem("sable_user",u); localStorage.setItem("sable_role",ROLE); err.style.display="none"; applyRole(); await bootCloud(); }
+    else { err.textContent="Usuario o clave incorrectos"; err.style.display="block"; }
   }
   function applyRole(){ document.body.classList.toggle("viewer", ROLE!=="editor"); const w=$("#whoLabel"); if(w) w.textContent = CURUSER + (ROLE==="editor"?"":" · solo lectura"); }
   function logout(){ ["sable_key","sable_user","sable_role"].forEach(k=>localStorage.removeItem(k)); location.reload(); }
