@@ -727,7 +727,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       const a = currMap[n]!=null?currMap[n]:0;
       return {name:n, base:b, curr:a, varv:a-b, pctv:pct(a,b)};
     });
-    rows.sort((x,y)=>y.varv-x.varv);
+    rows.sort((x,y)=>y.curr-x.curr);  // empresas de mayor a menor saldo (día actual)
     const maxAbs = Math.max(1, ...rows.map(r=>Math.abs(r.varv)));
 
     // KPIs
