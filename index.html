@@ -989,7 +989,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const pts=deudaSeries12(asOf);
     let svg="";
     if(pts && pts.length>1){
-      const n=pts.length,W=760,H=118,padL=6,padR=52,padT=12,padB=20;
+      const n=pts.length,W=760,H=150,padL=6,padR=52,padT=14,padB=22;
       const vals=pts.map(p=>p.saldo), vmax=Math.max(...vals), vmin=Math.min(...vals), span=(vmax-vmin)||1;
       const X=i=>padL+i*(W-padL-padR)/(n-1);
       const Y=v=>padT+(1-(v-vmin)/span)*(H-padT-padB);
@@ -999,15 +999,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       const yl=`<text x="${W-padR+6}" y="${(Y(vmax)+4).toFixed(1)}" class="cyl">${cMi(vmax)}</text><text x="${W-padR+6}" y="${(Y(vmin)+4).toFixed(1)}" class="cyl">${cMi(vmin)}</text>`;
       svg=`<svg viewBox="0 0 ${W} ${H}" class="deuda-svg"><defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2C1096" stop-opacity="0.22"/><stop offset="1" stop-color="#2C1096" stop-opacity="0.02"/></linearGradient></defs><path d="${area}" fill="url(#dg)"/><path d="${line}" class="cline"/><circle cx="${X(0).toFixed(1)}" cy="${Y(pts[0].saldo).toFixed(1)}" r="3.8" class="cdot"/>${yl}${xlab}</svg>`;
     }
-    // próximos vencimientos
-    const prox=proxVencimientos(asOf,6);
-    const rows=prox.length ? prox.map(v=>`<div class="prox-row"><span class="prox-date">${fmtISO(v.f)}</span><span class="prox-emp">${v.emp}<small>${v.det}</small></span><span class="prox-amt">${clp(v.monto)}</span></div>`).join("") : `<div class="prox-empty">Sin vencimientos próximos</div>`;
     el.classList.remove("hidden");
     el.innerHTML = `
       <div class="chart-title">Deuda · saldo insoluto <span>· próximos 12 meses</span></div>
-      ${svg}
-      <div class="prox-title">Próximos vencimientos</div>
-      <div class="prox-list">${rows}</div>`;
+      ${svg}`;
   }
   function renderDeuda(){
     if(!DEBT_DATA || !DEBT_DATA.loans){ const dc=$("#deudaCard"); if(dc) dc.innerHTML='<div class="empty-d" style="padding:24px">Cargando deuda…</div>'; return; }
