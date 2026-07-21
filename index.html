@@ -282,7 +282,12 @@
   .deuda-svg{width:100%;height:auto;display:block;overflow:visible}
   .deuda-svg .cg{stroke:#eef0f6;stroke-width:1}
   .deuda-svg .cline{fill:none;stroke:#2C1096;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
-  .deuda-svg .cbar{fill:#2C1096} .deuda-svg .cbar-lo{fill:#bcb4e8} .deuda-svg .csep{stroke:#c02b3f;stroke-width:1.2;stroke-dasharray:4 3}
+  .deuda-svg .cap-bar{fill:#2C1096} .deuda-svg .int-bar{fill:#d15a6e}
+  .deuda-svg .cbl{fill:var(--muted);font-size:10.5px;text-anchor:middle;font-weight:600}
+  .chart-legend{display:flex;gap:16px;font-size:11.5px;color:var(--muted);margin:2px 0 8px}
+  .chart-legend .lg{display:flex;align-items:center;gap:5px}
+  .chart-legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .lg-cap{background:#2C1096} .lg-int{background:#d15a6e}
   .deuda-svg .cnow{stroke:#c02b3f;stroke-width:1.3;stroke-dasharray:4 3}
   .deuda-svg .cdot{fill:#c02b3f;stroke:#fff;stroke-width:2}
   .deuda-svg .cyl{fill:var(--muted);font-size:12px}
@@ -956,50 +961,40 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     return {otorgado:bruto, pagado:capPag, saldo:bruto-capPag, totPagado:totPag, nPag:nPag};
   }
 
-  // ===== Deuda: pago mensual (servicio de deuda por mes) =====
-  function deudaMensual(asOf, months){
+  // ===== Deuda: perfil (amortización + intereses por año) =====
+  function deudaPerfil(){
     if(!DEBT_DATA||!DEBT_DATA.loans) return [];
-    const all=[]; DEBT_DATA.loans.forEach(l=>(l.cuotas||[]).forEach(c=>all.push({f:c.f,tot:c.tot})));
-    let yy=+asOf.slice(0,4), mm=+asOf.slice(5,7);
-    const pts=[];
-    for(let k=0;k<months;k++){ const key=yy+"-"+String(mm).padStart(2,"0"); let sum=0; all.forEach(c=>{ if(c.f.slice(0,7)===key) sum+=c.tot; }); pts.push({y:yy,m:mm,pay:sum}); mm++; if(mm>12){mm=1;yy++;} }
-    return pts;
+    const by={};
+    DEBT_DATA.loans.forEach(l=>(l.cuotas||[]).forEach(c=>{ const y=c.f.slice(0,4); (by[y]=by[y]||{cap:0,int:0}); by[y].cap+=c.cap; by[y].int+=(c.int||0); }));
+    return Object.keys(by).sort().map(y=>({y:y, cap:by[y].cap, int:by[y].int, tot:by[y].cap+by[y].int}));
   }
   function renderDeudaChart(){
     const el=$("#deudaChart"); if(!el) return;
     if(!DEBT_DATA||!DEBT_DATA.loans){ el.classList.add("hidden"); return; }
-    const asOf=debtAsOf();
-    const MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-    const mlab=(y,m)=>MES[m-1]+" '"+String(y).slice(2);
+    const data=deudaPerfil();
+    if(!data.length){ el.classList.add("hidden"); return; }
     const clpM=v=>"$"+Math.round(v/1e6).toLocaleString("es-CL")+"M";
-    const pts=deudaMensual(asOf,22);
-    if(!pts.length){ el.classList.add("hidden"); return; }
-    const maxPay=Math.max(...pts.map(p=>p.pay),1), heavy=maxPay;
-    // detectar el "alivio": primer mes que cae bajo la mitad del pago fuerte
-    let dropIdx=-1;
-    for(let k=1;k<pts.length;k++){ if(pts[k].pay<heavy*0.5 && pts[k-1].pay>=heavy*0.5){ dropIdx=k; break; } }
-    const lightLevel = dropIdx>=0 ? pts[dropIdx].pay : null;
-    let finishNames=[];
-    if(dropIdx>=0){
-      const dm=pts[dropIdx].y+"-"+String(pts[dropIdx].m).padStart(2,"0");
-      const lo=pts[Math.max(0,dropIdx-3)]; const lom=lo.y+"-"+String(lo.m).padStart(2,"0");
-      DEBT_DATA.loans.forEach(l=>{ if(l.cuotas&&l.cuotas.length){ const last=l.cuotas[l.cuotas.length-1].f.slice(0,7); if(last<dm && last>=lom) finishNames.push(l.empresa); } });
-      finishNames=[...new Set(finishNames)];
-    }
-    const W=760,H=178,padL=6,padR=56,padT=14,padB=26;
-    const slot=(W-padL-padR)/pts.length, bw=slot*0.6, baseY=H-padB;
-    const Y=v=>padT+(1-v/maxPay)*(H-padT-padB);
-    const bars=pts.map((p,i)=>{ const x=padL+i*slot+(slot-bw)/2, y=Y(p.pay); const cls=(dropIdx>=0&&i>=dropIdx)?"cbar cbar-lo":"cbar"; return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,baseY-y).toFixed(1)}" rx="2" class="${cls}"/>`; }).join("");
-    let xlab=""; pts.forEach((p,i)=>{ if(i%3===0) xlab+=`<text x="${(padL+i*slot+slot/2).toFixed(1)}" y="${H-8}" class="cxl">${mlab(p.y,p.m)}</text>`; });
-    const yl=`<text x="${W-padR+6}" y="${(Y(maxPay)+10).toFixed(1)}" class="cyl">${clpM(maxPay)}</text><text x="${W-padR+6}" y="${(baseY).toFixed(1)}" class="cyl">$0</text>`;
-    let sep=""; if(dropIdx>=0){ const dx=(padL+dropIdx*slot).toFixed(1); sep=`<line x1="${dx}" y1="${padT}" x2="${dx}" y2="${baseY}" class="csep"/>`; }
-    const cap = (dropIdx>=0
-      ? `El pago mensual de cuotas asciende a ≈<b>${clp(heavy)}</b>. A partir de <b>${mlab(pts[dropIdx].y,pts[dropIdx].m)}</b> disminuye a ≈<b>${clp(lightLevel)}</b> mensuales${finishNames.length?`, tras finalizar los créditos de ${finishNames.join(" y ")}`:""}.`
-      : `El pago mensual de cuotas asciende a ≈<b>${clp(heavy)}</b>.`).replace(/\.\.$/,".");
+    const maxY=Math.max(...data.map(d=>d.tot),1);
+    const W=760,H=210,padL=8,padR=58,padT=16,padB=26;
+    const slot=(W-padL-padR)/data.length, bw=Math.min(70, slot*0.56), baseY=H-padB;
+    const Y=v=>padT+(1-v/maxY)*(H-padT-padB);
+    let bars="";
+    data.forEach((d,i)=>{
+      const x=padL+i*slot+(slot-bw)/2;
+      const capTop=Y(d.cap), totTop=Y(d.tot);
+      bars+=`<rect x="${x.toFixed(1)}" y="${capTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,baseY-capTop).toFixed(1)}" class="cap-bar"/>`;
+      bars+=`<rect x="${x.toFixed(1)}" y="${totTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,capTop-totTop).toFixed(1)}" class="int-bar"/>`;
+      bars+=`<text x="${(x+bw/2).toFixed(1)}" y="${(totTop-5).toFixed(1)}" class="cbl">${clpM(d.tot)}</text>`;
+    });
+    let xlab=""; data.forEach((d,i)=>{ xlab+=`<text x="${(padL+i*slot+slot/2).toFixed(1)}" y="${H-8}" class="cxl">${d.y}</text>`; });
+    const yl=`<text x="${W-padR+6}" y="${(Y(maxY)+10).toFixed(1)}" class="cyl">${clpM(maxY)}</text><text x="${W-padR+6}" y="${baseY.toFixed(1)}" class="cyl">$0</text>`;
+    const totCap=data.reduce((s,d)=>s+d.cap,0), totInt=data.reduce((s,d)=>s+d.int,0), totAll=totCap+totInt;
     el.classList.remove("hidden");
-    el.innerHTML=`<div class="chart-title">Servicio de deuda mensual <span>· pago de cuotas por mes</span></div>
-      <svg viewBox="0 0 ${W} ${H}" class="deuda-svg">${sep}${bars}${yl}${xlab}</svg>
-      <div class="chart-cap">${cap}</div>`;
+    el.innerHTML=`
+      <div class="chart-title">Perfil de la deuda <span>· amortización e intereses por año</span></div>
+      <div class="chart-legend"><span class="lg"><i class="lg-cap"></i>Amortización (capital)</span><span class="lg"><i class="lg-int"></i>Intereses</span></div>
+      <svg viewBox="0 0 ${W} ${H}" class="deuda-svg">${bars}${yl}${xlab}</svg>
+      <div class="chart-cap">Total a pagar del crédito: ≈<b>${clp(totAll)}</b> — capital <b>${clp(totCap)}</b> + intereses <b>${clp(totInt)}</b> (${(totInt/totAll*100).toFixed(1)}% son intereses).</div>`;
   }
   function renderDeuda(){
     if(!DEBT_DATA || !DEBT_DATA.loans){ const dc=$("#deudaCard"); if(dc) dc.innerHTML='<div class="empty-d" style="padding:24px">Cargando deuda…</div>'; return; }
