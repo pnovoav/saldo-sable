@@ -306,7 +306,8 @@
   .cash-svg .c-grid{stroke:#eef0f6;stroke-width:1}
   .cash-svg .c-xl{fill:var(--muted);font-size:10.5px;text-anchor:middle}
   .cash-svg .c-yl{fill:var(--muted);font-size:11px}
-  .cash-svg .c-lastlab{fill:#2C1096;font-size:11.5px;font-weight:700;text-anchor:end}
+  .cash-svg .c-lastlab{fill:#2C1096;font-size:11.5px;font-weight:700;text-anchor:middle}
+  .cash-svg .c-lastbg{fill:#fff;stroke:#e7e4f4;stroke-width:1}
   .prox-title{font-size:11.5px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 4px}
   .prox-list{display:flex;flex-direction:column}
   .prox-row{display:flex;align-items:center;gap:12px;padding:8px 2px;border-bottom:1px solid #f0f2f7;font-size:13px}
@@ -1179,10 +1180,16 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const step=Math.max(1,Math.ceil(n/6));
     let xlab="";
     pts.forEach((p,i)=>{ if(i%step===0 || i===n-1){ xlab+=`<text x="${X(i).toFixed(1)}" y="${(H-12).toFixed(1)}" class="c-xl">${p.label.slice(0,5)}</text>`; } });
-    // punto final destacado + valor
+    // punto final destacado + valor (con pill blanco para que no se enrede con la línea)
     const last=pts[n-1], lx=X(n-1), ly=Y(last.v);
+    const lab=clpM(last.v), tw=lab.length*7.2+14, th=18;
+    let tcx=Math.min(lx, W-padR-tw/2-1);      // no invadir el canal de etiquetas Y
+    tcx=Math.max(padL+tw/2, tcx);
+    let tcy=ly-15;                            // arriba del punto
+    if(tcy-th/2<padT) tcy=ly+17;             // si no cabe arriba, va abajo
     const dot=`<circle class="c-dot" cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="4"/>`+
-      `<text x="${(lx-8).toFixed(1)}" y="${(ly-8).toFixed(1)}" class="c-lastlab">${clpM(last.v)}</text>`;
+      `<rect x="${(tcx-tw/2).toFixed(1)}" y="${(tcy-th/2).toFixed(1)}" width="${tw.toFixed(1)}" height="${th}" rx="6" class="c-lastbg"/>`+
+      `<text x="${tcx.toFixed(1)}" y="${(tcy+4).toFixed(1)}" class="c-lastlab">${lab}</text>`;
     // caption
     const first=pts[0].v, delta=last.v-first, pctd=first? delta/Math.abs(first)*100 : 0;
     const cap=`Del <b>${pts[0].label}</b> al <b>${last.label}</b> (${n} días). `+
