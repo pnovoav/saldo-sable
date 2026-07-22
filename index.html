@@ -312,6 +312,18 @@
   .cash-svg .c-yl{fill:var(--muted);font-size:11px}
   .cash-svg .c-lastlab{fill:#2C1096;font-size:11.5px;font-weight:700;text-anchor:middle}
   .cash-svg .c-lastbg{fill:#fff;stroke:#e7e4f4;stroke-width:1}
+  .comp-pick{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}
+  .comp-chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:4px 10px;border-radius:999px;
+    border:1px solid #d9dcea;background:#fff;color:var(--muted);cursor:pointer;user-select:none;line-height:1.2}
+  .comp-chip .cdot{width:9px;height:9px;border-radius:50%;flex:none}
+  .comp-chip.on{color:#fff;border-color:transparent;font-weight:600}
+  .comp-pick .pick-mini{font-size:11px;color:var(--muted);align-self:center;margin-right:2px}
+  .comp-svg{width:100%;height:auto;display:block;overflow:visible}
+  .comp-svg .cc-line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .comp-svg .c-grid{stroke:#eef0f6;stroke-width:1}
+  .comp-svg .c-xl{fill:var(--muted);font-size:10.5px;text-anchor:middle}
+  .comp-svg .c-yl{fill:var(--muted);font-size:11px}
+  .comp-empty{font-size:12px;color:var(--muted);padding:24px 4px;text-align:center}
   .prox-title{font-size:11.5px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 4px}
   .prox-list{display:flex;flex-direction:column}
   .prox-row{display:flex;align-items:center;gap:12px;padding:8px 2px;border-bottom:1px solid #f0f2f7;font-size:13px}
@@ -503,6 +515,7 @@ c-24 24 -25 27 -22 162 3 135 3 138 28 150 19 10 183 13 737 13 633 0 713 2
 
   <div id="panelDashboard" class="panel hidden">
     <div id="dashCashChart" class="card chart-card hidden"></div>
+    <div id="dashCompChart" class="card chart-card hidden"></div>
     <div id="dashDeuda" class="card chart-card hidden"></div>
     <div id="dashEmpty" class="empty card">Carga el Excel del día para ver la evolución de caja ✨</div>
   </div><!-- /panelDashboard -->
@@ -806,9 +819,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       <div class="kpi"><div class="k-label">Saldo total ${curr.label}</div>
         <div class="k-val">${clp(totC)}</div>
         <div class="k-sub">Anterior (${base.label}): ${clp(totB)}</div></div>
-      <div class="kpi"><div class="k-label">Variación total</div>
+      <div class="kpi"><div class="k-label">Variación período seleccionado</div>
         <div class="k-val ${totV>=0?'k-up':'k-down'}">${totV>=0?'▲ ':'▼ '}${clp(totV)}</div>
-        <div class="k-sub ${totV>=0?'k-up':'k-down'}">${totV>=0?'+':''}${pct(totC,totB).toFixed(1)}%</div></div>
+        <div class="k-sub ${totV>=0?'k-up':'k-down'}">${totV>=0?'+':''}${pct(totC,totB).toFixed(1)}% · ${base.label} → ${curr.label}</div></div>
       <div class="kpi"><div class="k-label">Empresas</div>
         <div class="k-val"><span class="k-up">▲ ${ups}</span> &nbsp; <span class="k-down">▼ ${downs}</span>${eqs?' &nbsp; <span class="k-eq">= '+eqs+'</span>':''}</div>
         <div class="k-sub">${rows.length} razones sociales</div></div>`;
@@ -1086,14 +1099,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const tSal=loans.reduce((s,x)=>s+x.st.saldo,0);
     const pctPag = tOt? tPag/tOt*100 : 0;
 
-    $("#deudaAsof").innerHTML = `📅 Deuda al <b>${fmtISO(asOf)}</b> · saldo insoluto calculado automáticamente desde las tablas de amortización`;
+    $("#deudaAsof").innerHTML = `📅 Deuda al <b>${fmtISO(asOf)}</b> · capital insoluto calculado automáticamente desde las tablas de amortización`;
 
     $("#deudaKpis").innerHTML = `
       <div class="kpi"><div class="k-label">Monto del crédito</div><div class="k-val">${clp(tOt)}</div>
         <div class="k-sub">${loans.length} créditos · monto bruto</div></div>
       <div class="kpi"><div class="k-label">Capital amortizado</div><div class="k-val k-up">${clp(tPag)}</div>
         <div class="k-sub k-up">${pctPag.toFixed(1)}% del crédito</div></div>
-      <div class="kpi"><div class="k-label">Saldo insoluto</div><div class="k-val k-down">${clp(tSal)}</div>
+      <div class="kpi"><div class="k-label">Capital insoluto</div><div class="k-val k-down">${clp(tSal)}</div>
         <div class="k-sub">capital que aún se debe</div></div>`;
 
     deudaView={level:"year",year:null,month:null};
@@ -1110,21 +1123,21 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         <td data-label="Monto del crédito">${clpPlain(st.otorgado)}</td>
         <td data-label="Capital amortizado">${clpPlain(st.pagado)}</td>
         <td data-label="% Pagado"><div class="prog"><div class="prog-track"><div class="prog-fill" style="width:${p.toFixed(1)}%"></div></div><span class="prog-pct">${p.toFixed(1)}%</span></div></td>
-        <td data-label="Saldo insoluto"><b>${clpPlain(st.saldo)}</b></td>
+        <td data-label="Capital insoluto"><b>${clpPlain(st.saldo)}</b></td>
       </tr>`;
     }).join("");
 
     $("#deudaCard").innerHTML = `<table>
-      <thead><tr><th class="l">Empresa</th><th>Monto del crédito</th><th>Capital amortizado</th><th>% Pagado</th><th>Saldo insoluto</th></tr></thead>
+      <thead><tr><th class="l">Empresa</th><th>Monto del crédito</th><th>Capital amortizado</th><th>% Pagado</th><th>Capital insoluto</th></tr></thead>
       <tbody>${body}</tbody>
       <tfoot><tr><td class="l">TOTALES</td><td data-label="Monto del crédito">${clpPlain(tOt)}</td><td data-label="Capital amortizado">${clpPlain(tPag)}</td>
-        <td data-label="% Pagado">${pctPag.toFixed(1)}%</td><td data-label="Saldo insoluto">${clpPlain(tSal)}</td></tr></tfoot></table>`;
+        <td data-label="% Pagado">${pctPag.toFixed(1)}%</td><td data-label="Capital insoluto">${clpPlain(tSal)}</td></tr></tfoot></table>`;
 
     $("#deudaCard").querySelectorAll("td.co-link").forEach(el=>{
       el.addEventListener("click", ()=> openAmort(+el.dataset.loan));
     });
 
-    $("#deudaFootNote").innerHTML = `* Monto del crédito = monto bruto (Σ capital de las cuotas). Saldo insoluto = capital pendiente al ${fmtISO(asOf)} (cuotas con vencimiento posterior). Haz clic en un crédito (▸) para ver su tabla de amortización completa.`;
+    $("#deudaFootNote").innerHTML = `* Monto del crédito = monto bruto (Σ capital de las cuotas). Capital insoluto = capital pendiente al ${fmtISO(asOf)} (cuotas con vencimiento posterior). Haz clic en un crédito (▸) para ver su tabla de amortización completa.`;
   }
 
   function openAmort(idx){
@@ -1157,20 +1170,36 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       <div class="m-tot">
         <div class="box"><div class="t-lab">Monto del crédito</div><div class="t-val">${clp(bruto)}</div></div>
         <div class="box"><div class="t-lab">Capital amortizado (${nPag}/${l.cuotas.length})</div><div class="t-val k-up">${clp(capPag)}</div></div>
-        <div class="box"><div class="t-lab">Saldo insoluto</div><div class="t-val k-down">${clp(saldo)}</div></div>
+        <div class="box"><div class="t-lab">Capital insoluto</div><div class="t-val k-down">${clp(saldo)}</div></div>
       </div>
       <div class="m-body">
         <table class="detail amort">
           <thead><tr><th>N°</th><th class="l">Vencimiento</th><th>Capital</th><th>Interés</th>${hasCom?'<th>Comisión</th>':''}<th>Cuota total</th><th>Saldo capital</th><th>Estado</th></tr></thead>
           <tbody>${rowsHtml}</tbody>
         </table>
-        <div class="lc-note">Monto del crédito = ${clp(bruto)} (bruto). Saldo insoluto = capital pendiente = ${clp(saldo)}. Desembolsado a la fecha (capital+interés): ${clp(totPag)}. Las cuotas con vencimiento hasta el ${fmtISO(asOf)} se marcan como pagadas. Crédito de ${l.cuotas.length} cuotas · ${l.banco}.</div>
+        <div class="lc-note">Monto del crédito = ${clp(bruto)} (bruto). Capital insoluto = capital pendiente = ${clp(saldo)}. Desembolsado a la fecha (capital+interés): ${clp(totPag)}. Las cuotas con vencimiento hasta el ${fmtISO(asOf)} se marcan como pagadas. Crédito de ${l.cuotas.length} cuotas · ${l.banco}.</div>
       </div>`;
     $("#overlay").classList.add("show");
     $("#mClose").addEventListener("click", closeDetail);
   }
 
   // ===== Dashboard: evolución de caja histórica =====
+  // escala con números redondos para los ejes (1000, 1500, 2000…)
+  function niceNum(x, round){
+    if(x<=0) return 1;
+    const exp=Math.floor(Math.log10(x)), f=x/Math.pow(10,exp);
+    let nf;
+    if(round){ nf = f<1.5?1 : f<3?2 : f<7?5 : 10; }
+    else { nf = f<=1?1 : f<=2?2 : f<=5?5 : 10; }
+    return nf*Math.pow(10,exp);
+  }
+  function niceScale(min,max,count){
+    if(!(max>min)) max=min+1;
+    const step=niceNum((max-min)/Math.max(1,count-1), true);
+    const nmin=Math.floor(min/step)*step, nmax=Math.ceil(max/step)*step;
+    const ticks=[]; for(let v=nmin; v<=nmax+step*0.5; v+=step) ticks.push(Math.round(v));
+    return {nmin,nmax,ticks};
+  }
   function renderCashChart(){
     const el=$("#dashCashChart"); if(!el) return;
     const keys=ORDER.slice().reverse();   // cronológico: más antiguo → más reciente
@@ -1180,15 +1209,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const n=pts.length;
     const W=760,H=232,padL=8,padR=66,padT=20,padB=34;
     const maxV=Math.max(...pts.map(p=>p.v)), minV=Math.min(...pts.map(p=>p.v));
-    // zoom al rango de datos (con headroom) para que se vea la variación; eje etiquetado con valores reales
-    const rng=maxV-minV, pad=rng>0?rng*0.18:Math.abs(maxV)*0.05||1;
-    const lo=Math.max(0, minV-pad), hi=maxV+pad, span=(hi-lo)||1;
+    // eje Y con números redondos (zoom al rango de datos pero con cortes limpios)
+    const sc=niceScale(minV, maxV, 5), lo=sc.nmin, hi=sc.nmax, span=(hi-lo)||1;
     const X=i=> padL + (n===1?0:i*(W-padL-padR)/(n-1));
     const Y=v=> padT + (1-(v-lo)/span)*(H-padT-padB);
     const baseY=H-padB;
-    // grilla horizontal (3 niveles) + etiquetas Y
+    // grilla horizontal en montos redondos + etiquetas Y
     let grid="", yl="";
-    [maxV,(maxV+lo)/2,lo].forEach(v=>{ const y=Y(v);
+    sc.ticks.forEach(v=>{ const y=Y(v);
       grid+=`<line class="c-grid" x1="${padL}" y1="${y.toFixed(1)}" x2="${(W-padR).toFixed(1)}" y2="${y.toFixed(1)}"/>`;
       yl+=`<text x="${(W-padR+6).toFixed(1)}" y="${(y+3).toFixed(1)}" class="c-yl">${clpM(v)}</text>`;
     });
@@ -1227,10 +1255,69 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       </svg>
       <div class="chart-cap">${cap}</div>`;
   }
+  // ===== Dashboard: evolución por empresa (multi-selección) =====
+  const COMP_COLORS=["#2C1096","#e0567a","#1f9d6b","#e8912a","#3a86ff","#c0392b","#8e44ad","#0e9d8f","#d4a017","#2d6cdf","#d15a6e","#0e7c66","#b8860b","#7048c0","#c2477a"];
+  let compSel=null;   // Set de nombres seleccionados (null = aún sin inicializar)
+  function allCompanies(){
+    const seen=[]; ORDER.forEach(k=>(SHEETS[k].companies||[]).forEach(c=>{ if(!seen.includes(c.name)) seen.push(c.name); }));
+    const latest={}; (SHEETS[ORDER[0]]?SHEETS[ORDER[0]].companies||[]:[]).forEach(c=>latest[c.name]=c.total);
+    return seen.sort((a,b)=>(latest[b]||0)-(latest[a]||0));   // por saldo más reciente (color/orden estable)
+  }
+  function compColor(names,name){ return COMP_COLORS[names.indexOf(name)%COMP_COLORS.length]; }
+  function renderCompaniesChart(){
+    const el=$("#dashCompChart"); if(!el) return;
+    const keys=ORDER.slice().reverse();
+    if(keys.length<2){ el.classList.add("hidden"); return; }
+    const names=allCompanies();
+    if(compSel===null) compSel=new Set(names.slice(0,3));   // por defecto las 3 de mayor saldo
+    const clpM=v=>"$"+Math.round(v/1e6).toLocaleString("es-CL")+"M";
+    const seriesFor=name=>keys.map(k=>{ const c=(SHEETS[k].companies||[]).find(x=>x.name===name); return c?c.total:0; });
+    const sel=names.filter(nm=>compSel.has(nm));
+    // chips
+    const chips=names.map(nm=>{
+      const on=compSel.has(nm), col=compColor(names,nm);
+      return `<button class="comp-chip ${on?'on':''}" data-co="${nm.replace(/"/g,'&quot;')}" style="${on?`background:${col};`:''}">
+        <span class="cdot" style="background:${on?'#fff':col}"></span>${nm}</button>`;
+    }).join("");
+    const pick=`<div class="comp-pick"><span class="pick-mini">Empresas:</span>${chips}</div>`;
+    // svg
+    const W=760,H=236,padL=8,padR=66,padT=18,padB=34;
+    let svg;
+    if(!sel.length){
+      svg=`<div class="comp-empty">Selecciona una o varias empresas arriba para ver su evolución.</div>`;
+    } else {
+      const series=sel.map(nm=>({nm,col:compColor(names,nm),vals:seriesFor(nm)}));
+      const all=series.flatMap(s=>s.vals);
+      const maxV=Math.max(...all,1), minV=Math.min(...all,0);
+      const sc=niceScale(minV,maxV,5), lo=sc.nmin, hi=sc.nmax, span=(hi-lo)||1;
+      const n=keys.length;
+      const X=i=>padL+(n===1?0:i*(W-padL-padR)/(n-1));
+      const Y=v=>padT+(1-(v-lo)/span)*(H-padT-padB);
+      let grid="",yl="";
+      sc.ticks.forEach(v=>{ const y=Y(v);
+        grid+=`<line class="c-grid" x1="${padL}" y1="${y.toFixed(1)}" x2="${(W-padR).toFixed(1)}" y2="${y.toFixed(1)}"/>`;
+        yl+=`<text x="${(W-padR+6).toFixed(1)}" y="${(y+3).toFixed(1)}" class="c-yl">${clpM(v)}</text>`;
+      });
+      let lines="";
+      series.forEach(s=>{ let d=""; s.vals.forEach((v,i)=>{ d+=(i?"L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1)+" "; });
+        lines+=`<path class="cc-line" style="stroke:${s.col}" d="${d}"/>`; });
+      const stepx=Math.max(1,Math.ceil(n/6));
+      let xlab=""; keys.forEach((k,i)=>{ if(i%stepx===0||i===n-1){ xlab+=`<text x="${X(i).toFixed(1)}" y="${(H-12).toFixed(1)}" class="c-xl">${SHEETS[k].label.slice(0,5)}</text>`; } });
+      svg=`<svg viewBox="0 0 ${W} ${H}" class="comp-svg">${grid}${lines}${yl}${xlab}</svg>`;
+    }
+    el.classList.remove("hidden");
+    el.innerHTML=`<div class="chart-title">Evolución por empresa <span>· elige una o varias (todo el período cargado)</span></div>${pick}${svg}`;
+    el.querySelectorAll(".comp-chip").forEach(b=>b.addEventListener("click",()=>{
+      const nm=b.getAttribute("data-co");
+      if(compSel.has(nm)) compSel.delete(nm); else compSel.add(nm);
+      renderCompaniesChart();
+    }));
+  }
   function renderDashboard(){
     const hasData = ORDER && ORDER.length>=1;
     $("#dashEmpty").classList.toggle("hidden", !!hasData);
     renderCashChart();
+    renderCompaniesChart();
     deudaView={level:"year",year:null,month:null};
     renderDeudaChart("#dashDeuda");
   }
