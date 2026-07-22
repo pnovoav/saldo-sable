@@ -145,6 +145,9 @@
     font-size:13px;padding:11px 16px;border-radius:12px;margin-bottom:18px}
   .asof-bar b{color:#fff}
   .row-sub{font-size:11.5px;color:var(--muted);font-weight:500;margin-top:2px}
+  .cell-sub{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:1px}
+  .moneda{display:inline-block;background:#eef0f7;color:var(--navy);font-weight:700;font-size:11px;border-radius:6px;padding:2px 8px}
+  #deudaCard{overflow-x:auto;-webkit-overflow-scrolling:touch}
   table.amort th{font-size:10.5px}
   table.amort td{padding:6px 8px;font-size:12.5px}
   tr.amort-paid td{background:#eef7f1}
@@ -1151,6 +1154,28 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       renderDeudaChart();
     }));
   }
+  // tasa efectiva (TIR mensual, Newton) desde el flujo real de cuotas
+  function loanRate(cuotas){
+    if(!cuotas || cuotas.length<2) return null;
+    const bruto=cuotas.reduce((s,c)=>s+c.cap,0), tots=cuotas.map(c=>c.tot||0);
+    if(!bruto) return null;
+    let r=0.01;
+    for(let it=0; it<200; it++){
+      let f=-bruto, df=0;
+      for(let i=0;i<tots.length;i++){ const p=Math.pow(1+r,i+1); f+=tots[i]/p; df+=-(i+1)*tots[i]/(p*(1+r)); }
+      if(!isFinite(f)||!isFinite(df)||df===0) break;
+      const step=f/df; r-=step; if(Math.abs(step)<1e-12) break;
+    }
+    if(!isFinite(r)||r<=-0.99) return null;
+    return {mensual:r, anual:Math.pow(1+r,12)-1};
+  }
+  function cuotaMensual(cuotas, asOf){
+    if(!cuotas || !cuotas.length) return null;
+    const next=cuotas.find(c=>c.f>asOf);
+    return (next||cuotas[cuotas.length-1]).tot;
+  }
+  const pctD = (n,d) => (n*100).toLocaleString("es-CL",{minimumFractionDigits:d,maximumFractionDigits:d})+"%";
+
   function renderDeuda(){
     if(!DEBT_DATA || !DEBT_DATA.loans){ const dc=$("#deudaCard"); if(dc) dc.innerHTML='<div class="empty-d" style="padding:24px">Cargando deuda…</div>'; return; }
     const asOf = debtAsOf();
@@ -1173,15 +1198,23 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     deudaView={level:"year",year:null,month:null};
     renderDeudaChart("#deudaChart");
 
+    const tCuota = DEBT_DATA.loans.reduce((s,l)=> s + (l.cuotas ? (cuotaMensual(l.cuotas,asOf)||0) : 0), 0);
+
     const body = loans.map(x=>{
       const l=x.loan, st=x.st;
       const p = st.otorgado? st.pagado/st.otorgado*100 : 0;
+      const rt = l.cuotas ? loanRate(l.cuotas) : null;
+      const tasaCell = rt ? `<b>${pctD(rt.mensual,2)}</b> mens.<span class="cell-sub">${pctD(rt.anual,1)} anual</span>` : "—";
+      const cm = l.cuotas ? cuotaMensual(l.cuotas, asOf) : null;
       const nameCell = l.cuotas
         ? `<td class="l co-link" data-loan="${x.idx}" title="Ver tabla de amortización de ${l.empresa}">${l.empresa}<span class="chev">▸</span><div class="row-sub">${l.detalle} · ${st.nPag}/${l.cuotas.length} cuotas pagadas</div></td>`
         : `<td class="l">${l.empresa}<div class="row-sub">${l.detalle}</div></td>`;
       return `<tr>
         ${nameCell}
+        <td data-label="Moneda"><span class="moneda">CLP</span></td>
+        <td data-label="Tasa">${tasaCell}</td>
         <td data-label="Monto del crédito">${clpPlain(st.otorgado)}</td>
+        <td data-label="Cuota mensual">${cm!=null?clpPlain(cm):"—"}</td>
         <td data-label="Capital amortizado">${clpPlain(st.pagado)}</td>
         <td data-label="% Pagado"><div class="prog"><div class="prog-track"><div class="prog-fill" style="width:${p.toFixed(1)}%"></div></div><span class="prog-pct">${p.toFixed(1)}%</span></div></td>
         <td data-label="Capital insoluto"><b>${clpPlain(st.saldo)}</b></td>
@@ -1189,16 +1222,17 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     }).join("");
 
     $("#deudaCard").innerHTML = `<table>
-      <thead><tr><th class="l">Empresa</th><th>Monto del crédito</th><th>Capital amortizado</th><th>% Pagado</th><th>Capital insoluto</th></tr></thead>
+      <thead><tr><th class="l">Empresa</th><th>Moneda</th><th>Tasa</th><th>Monto del crédito</th><th>Cuota mensual</th><th>Capital amortizado</th><th>% Pagado</th><th>Capital insoluto</th></tr></thead>
       <tbody>${body}</tbody>
-      <tfoot><tr><td class="l">TOTALES</td><td data-label="Monto del crédito">${clpPlain(tOt)}</td><td data-label="Capital amortizado">${clpPlain(tPag)}</td>
+      <tfoot><tr><td class="l">TOTALES</td><td data-label="Moneda">CLP</td><td data-label="Tasa"></td><td data-label="Monto del crédito">${clpPlain(tOt)}</td>
+        <td data-label="Cuota mensual">${clpPlain(tCuota)}</td><td data-label="Capital amortizado">${clpPlain(tPag)}</td>
         <td data-label="% Pagado">${pctPag.toFixed(1)}%</td><td data-label="Capital insoluto">${clpPlain(tSal)}</td></tr></tfoot></table>`;
 
     $("#deudaCard").querySelectorAll("td.co-link").forEach(el=>{
       el.addEventListener("click", ()=> openAmort(+el.dataset.loan));
     });
 
-    $("#deudaFootNote").innerHTML = `* Monto del crédito = monto bruto (Σ capital de las cuotas). Capital insoluto = capital pendiente al ${fmtISO(asOf)} (cuotas con vencimiento posterior). Haz clic en un crédito (▸) para ver su tabla de amortización completa.`;
+    $("#deudaFootNote").innerHTML = `* Monto del crédito = monto bruto (Σ capital de las cuotas). Capital insoluto = capital pendiente al ${fmtISO(asOf)} (cuotas con vencimiento posterior). Tasa = tasa efectiva (TIR) calculada del flujo de la amortización; se muestra mensual y su equivalente anual. Cuota mensual = próxima cuota a pagar. Haz clic en un crédito (▸) para ver su tabla de amortización completa.`;
   }
 
   function openAmort(idx){
