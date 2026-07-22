@@ -145,6 +145,10 @@
     font-size:13px;padding:11px 16px;border-radius:12px;margin-bottom:18px}
   .asof-bar b{color:#fff}
   .row-sub{font-size:11.5px;color:var(--muted);font-weight:500;margin-top:2px}
+  tr.grp-sep td{background:#f3f1fb;color:var(--navy);font-weight:700;font-size:11.5px;padding:8px 14px;text-transform:uppercase;letter-spacing:.4px;text-align:left}
+  .grp-hint{color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0}
+  tr.otra-row td{background:#fbfaff}
+  .row-tag{display:inline-block;background:#eceaf7;color:var(--navy);font-weight:600;font-size:10px;border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
   .cell-sub{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:1px}
   .moneda{display:inline-block;background:#eef0f7;color:var(--navy);font-weight:700;font-size:11px;border-radius:6px;padding:2px 8px}
   #deudaCard{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -882,13 +886,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         return `<div class="caja-card"><div class="cj-label">${x.label}</div><div class="cj-val">${clp(x.val)}</div><div class="cj-sub">${sub}</div></div>`;
       }).join("");
     } else { cajasEl.classList.add("hidden"); cajasEl.innerHTML=""; }
-    // ---- otras cajas fuera del saldo total (Insigni caja terceros · Sable Tech otras monedas) ----
-    const otEl=$("#otrasCajas"), ot=curr.otras||[];
-    if(ot.length){
-      otEl.classList.remove("hidden");
-      otEl.innerHTML = `<span class="oc-title">Otras cajas <em>(fuera del saldo total)</em>:</span> ` +
-        ot.map(x=>`<span class="oc-item"><b>${x.name}</b> <span class="oc-tag">${x.tag}</span> ${clp(x.total)}</span>`).join("");
-    } else { otEl.classList.add("hidden"); otEl.innerHTML=""; }
+    // (las "otras cajas" van como filas al final de la tabla, no en franja)
+    const otEl=$("#otrasCajas"); otEl.classList.add("hidden"); otEl.innerHTML="";
+    // unir otras cajas (Insigni terceros, Sable Tech) por nombre, base + actual
+    const baseOtras={}; (base.otras||[]).forEach(o=>baseOtras[o.name]=o.total);
+    const currOtras={}; (curr.otras||[]).forEach(o=>currOtras[o.name]=o.total);
+    const otrasList=[]; const seenO={};
+    (curr.otras||[]).forEach(o=>{ otrasList.push({name:o.name,tag:o.tag}); seenO[o.name]=1; });
+    (base.otras||[]).forEach(o=>{ if(!seenO[o.name]) otrasList.push({name:o.name,tag:o.tag}); });
 
     // table
     const body = rows.map(r=>{
@@ -913,6 +918,25 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       </tr>`;
     }).join("");
 
+    // filas de "otras cajas" (fuera del saldo total) al final de la tabla
+    let otrasBody = "";
+    if(otrasList.length){
+      otrasBody = `<tr class="grp-sep"><td class="l" colspan="7">Otras cajas <span class="grp-hint">· fuera del saldo total</span></td></tr>` +
+        otrasList.map(o=>{
+          const b=baseOtras[o.name]||0, a=currOtras[o.name]||0, v=a-b, eq=v===0, pos=v>0, vcls=eq?"eq":(pos?"pos":"neg");
+          const barW=Math.min(90,Math.round(Math.abs(v)/maxAbs*90))+"px";
+          return `<tr class="otra-row">
+            <td class="l">${o.name}<span class="row-tag">${o.tag}</span></td>
+            <td data-label="${base.label}">${clpPlain(b)}</td>
+            <td data-label="${curr.label}">${clpPlain(a)}</td>
+            <td data-label="Variación"><span class="var-cell ${vcls}">${eq?'= 0':(pos?'+':'')+clpPlain(v)}</span></td>
+            <td data-label="Var.%" class="pct ${vcls}" style="background:transparent">${eq?'=':(pos?'+':'')+pct(a,b).toFixed(1)+'%'}</td>
+            <td data-label="Tendencia">${eq?'<span class="eq-mark">=</span>':`<div class="bar-wrap"><div class="bar ${pos?'pos':'neg'}" style="width:${barW}"></div></div>`}</td>
+            <td data-label="Observaciones"><span class="obs-off">—</span></td>
+          </tr>`;
+        }).join("");
+    }
+
     $("#tableCard").classList.remove("hidden");
     $("#tableCard").innerHTML = `
       <table>
@@ -925,7 +949,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           <th>Tendencia</th>
           <th class="l">Observaciones${consecutivo?'':' <span class="th-hint">· solo día a día</span>'}</th>
         </tr></thead>
-        <tbody>${body}</tbody>
+        <tbody>${body}${otrasBody}</tbody>
         <tfoot><tr>
           <td class="l">TOTAL</td>
           <td data-label="${base.label}">${clpPlain(totB)}</td>
@@ -963,6 +987,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     if(curr.dolar!=null) dolarLine.push(`${curr.label}: $${curr.dolar.toLocaleString("es-CL",{minimumFractionDigits:2,maximumFractionDigits:2})}`);
     $("#footNote").innerHTML =
       `* Saldo total CLP + USD + FFMM/DAP. Dólar observado — ${dolarLine.join("  ·  ")}.<br>`+
+      (otrasList.length ? `↳ Las "otras cajas" (Insigni terceros, Sable Tech en moneda extranjera) se muestran aparte y <b>no</b> se suman al saldo total.<br>` : "")+
       `💡 Haz clic en el nombre de una empresa (▸) para ver el detalle por banco y cuenta. `+
       (consecutivo
         ? `Escribe las Observaciones directo en la celda; quedan guardadas para esa fecha.`
