@@ -152,6 +152,17 @@
   .cell-sub{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:1px}
   .moneda{display:inline-block;background:#eef0f7;color:var(--navy);font-weight:700;font-size:11px;border-radius:6px;padding:2px 8px}
   #deudaCard{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* tabla de deuda compacta para que entren las 8 columnas sin scroll */
+  #deudaCard table{font-size:12px}
+  #deudaCard thead th{padding:10px 6px;font-size:10.5px;letter-spacing:.1px}
+  #deudaCard tbody td, #deudaCard tfoot td{padding:8px 6px}
+  #deudaCard tbody td.l, #deudaCard tfoot td.l{padding-left:13px}
+  #deudaCard .row-sub{font-size:9.5px}
+  #deudaCard .cell-sub{font-size:9.5px}
+  #deudaCard .moneda{padding:1px 5px;font-size:9.5px}
+  #deudaCard .prog{gap:5px}
+  #deudaCard .prog-track{width:40px}
+  #deudaCard .prog-pct{min-width:32px;font-size:11px}
   table.amort th{font-size:10.5px}
   table.amort td{padding:6px 8px;font-size:12.5px}
   tr.amort-paid td{background:#eef7f1}
