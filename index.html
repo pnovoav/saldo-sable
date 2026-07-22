@@ -316,9 +316,15 @@
   .lg-cap{background:#2C1096} .lg-int{background:#d15a6e}
   .deuda-svg .hit{fill:transparent;cursor:pointer} .deuda-svg .hit:hover{fill:rgba(44,16,150,0.06)}
   .deuda-svg .cxl2{fill:var(--muted);font-size:9.5px;text-anchor:middle}
-  .chart-bc{font-size:11.5px;margin-bottom:6px}
+  .chart-bc{font-size:11.5px;margin-bottom:10px;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
   .crumb{cursor:pointer;color:var(--navy);font-weight:600} .crumb:hover{text-decoration:underline}
-  .chart-hint{color:var(--muted);font-weight:500;font-size:11px}
+  .crumb-btn{cursor:pointer;color:var(--navy);font-weight:700;font-size:11.5px;background:#efecfb;border:1px solid #cfc6ef;
+    border-radius:8px;padding:5px 12px;display:inline-flex;align-items:center;gap:4px;line-height:1;transition:background .12s}
+  .crumb-btn:hover{background:#e0d9f6;border-color:#b3a6e6}
+  .crumb-link{cursor:pointer;color:var(--navy);font-weight:600;font-size:11.5px;text-decoration:underline}
+  .crumb-link:hover{color:#1c0a70}
+  .bc-path{color:var(--muted);font-size:11px} .bc-path b{color:var(--navy)}
+  .chart-hint{color:#8a5cf6;font-weight:600;font-size:11px;background:#f1ecfe;border-radius:6px;padding:2px 8px}
   .deuda-svg .cnow{stroke:#c02b3f;stroke-width:1.3;stroke-dasharray:4 3}
   .deuda-svg .cdot{fill:#c02b3f;stroke:#fff;stroke-width:2}
   .deuda-svg .cyl{fill:var(--muted);font-size:12px}
@@ -1150,16 +1156,16 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       if(b.drillable) hits+=`<rect class="hit" data-drill="${d.drill}" x="${(padL+i*slot).toFixed(1)}" y="${padT}" width="${slot.toFixed(1)}" height="${(baseY-padT).toFixed(1)}"/>`;
     });
     const yl=`<text x="${W-padR+6}" y="${(Y(maxY)+10).toFixed(1)}" class="cyl">${clpM(maxY)}</text><text x="${W-padR+6}" y="${baseY.toFixed(1)}" class="cyl">$0</text>`;
-    // breadcrumb
+    // breadcrumb: botón "volver" claro + ruta
     let bc="";
-    if(b.level==="month") bc=`<span class="crumb" data-nav="year">‹ Todos los años</span>`;
-    else if(b.level==="day") bc=`<span class="crumb" data-nav="year">Años</span> › <span class="crumb" data-nav="month">${deudaView.year}</span>`;
+    if(b.level==="month") bc=`<button type="button" class="crumb-btn" data-nav="year">‹ Volver a todos los años</button><span class="bc-path">Años › <b>${deudaView.year}</b></span>`;
+    else if(b.level==="day") bc=`<button type="button" class="crumb-btn" data-nav="month">‹ Volver a ${deudaView.year}</button><span class="crumb-link" data-nav="year">todos los años</span><span class="bc-path">${deudaView.year} › <b>${_MES[+deudaView.month-1]}</b></span>`;
     // caption
     const sCap=items.reduce((a,d)=>a+d.cap,0), sInt=items.reduce((a,d)=>a+d.int,0), sTot=sCap+sInt;
     let cap;
     if(b.level==="year") cap=`Total a pagar del crédito: ≈<b>${clp(sTot)}</b> — capital <b>${clp(sCap)}</b> + intereses <b>${clp(sInt)}</b> (${(sInt/sTot*100).toFixed(1)}% intereses).`;
     else cap=`${b.title.split(" · ")[0]}: capital <b>${clp(sCap)}</b> + intereses <b>${clp(sInt)}</b> = <b>${clp(sTot)}</b>.`;
-    const hint = b.drillable ? ` <span class="chart-hint">· toca una barra para ver el detalle</span>` : "";
+    const hint = b.drillable ? ` <span class="chart-hint">👆 toca una barra para ver el detalle</span>` : "";
     el.classList.remove("hidden");
     el.innerHTML=`
       <div class="chart-title">Perfil de la deuda <span>· ${b.title}</span>${hint}</div>
