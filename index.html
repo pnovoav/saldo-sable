@@ -82,6 +82,10 @@
     padding:14px 14px;font-weight:600;font-size:12.5px;letter-spacing:.3px;white-space:nowrap;
   }
   thead th.l{text-align:left}
+  thead th.sortable{cursor:pointer;user-select:none}
+  thead th.sortable:hover{background:linear-gradient(180deg,#3a1cc0,#2a0f8f)}
+  .sort-ar{font-size:10px;margin-left:4px;opacity:.95}
+  .sort-ar.dim{opacity:.4}
   tbody td{padding:11px 14px;border-bottom:1px solid #f0f2f7;text-align:right;white-space:nowrap}
   tbody td.l{text-align:left;font-weight:600;color:var(--ink)}
   tbody tr:hover{background:#f8faff}
@@ -604,6 +608,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 
   let SHEETS = {};   // dateKey -> {label, dateObj, dolar, week, companies:[{name,total}], grandTotal}
   let ORDER = [];    // dateKeys sorted DESC by date
+  let sortState = {key:"varv", dir:"desc"};   // orden de la tabla; por defecto variación de mayor a menor
 
   // ---- parse one worksheet ----
   function parseSheet(ws, sheetName){
@@ -760,6 +765,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 
   function obsKey(currKey, name){ return "obs::"+SHEETS[currKey].label+"::"+name; }
 
+  // encabezados ordenables
+  function sortArrow(k){ return sortState.key===k ? `<span class="sort-ar">${sortState.dir==="asc"?"▲":"▼"}</span>` : `<span class="sort-ar dim">↕</span>`; }
+  function onSortClick(k){
+    if(sortState.key===k){ sortState.dir = sortState.dir==="asc"?"desc":"asc"; }
+    else { sortState.key=k; sortState.dir = k==="name"?"asc":"desc"; }   // texto default A→Z; números default mayor→menor
+    render();
+  }
+
   function render(){
     const cKey = $("#selCurr").value, bKey = $("#selBase").value;
     if(!cKey||!bKey) return;
@@ -780,7 +793,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       const a = currMap[n]!=null?currMap[n]:0;
       return {name:n, base:b, curr:a, varv:a-b, pctv:pct(a,b)};
     });
-    rows.sort((x,y)=>y.curr-x.curr);  // empresas de mayor a menor saldo (día actual)
+    // orden según sortState (encabezados clickeables); default = variación de mayor a menor
+    const sdir = sortState.dir==="asc" ? 1 : -1, sk = sortState.key;
+    rows.sort((x,y)=> sk==="name" ? x.name.localeCompare(y.name)*sdir : (x[sk]-y[sk])*sdir);
     const maxAbs = Math.max(1, ...rows.map(r=>Math.abs(r.varv)));
 
     // KPIs
@@ -825,11 +840,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     $("#tableCard").innerHTML = `
       <table>
         <thead><tr>
-          <th class="l">Empresa</th>
-          <th>${base.label}</th>
-          <th>${curr.label}</th>
-          <th>Variación</th>
-          <th>Var.%</th>
+          <th class="l sortable" data-sort="name">Empresa${sortArrow('name')}</th>
+          <th class="sortable" data-sort="base">${base.label}${sortArrow('base')}</th>
+          <th class="sortable" data-sort="curr">${curr.label}${sortArrow('curr')}</th>
+          <th class="sortable" data-sort="varv">Variación${sortArrow('varv')}</th>
+          <th class="sortable" data-sort="pctv">Var.%${sortArrow('pctv')}</th>
           <th>Tendencia</th>
           <th class="l">Observaciones${consecutivo?'':' <span class="th-hint">· solo día a día</span>'}</th>
         </tr></thead>
@@ -857,6 +872,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // clic en empresa -> detalle por banco
     $("#tableCard").querySelectorAll("td.co-link").forEach(el=>{
       el.addEventListener("click", ()=> openDetail(el.dataset.detail));
+    });
+
+    // clic en encabezado -> ordenar por esa columna
+    $("#tableCard").querySelectorAll("th.sortable").forEach(th=>{
+      th.addEventListener("click", ()=> onSortClick(th.dataset.sort));
     });
 
     // footnote
