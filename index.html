@@ -701,7 +701,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       }
     }
 
-    const grandTotal = Number(get(headerRow,11)) || 0;   // column L = idx 11 on header row
+    let grandTotal = Number(get(headerRow,11)) || 0;   // column L = idx 11 on header row
     const companies=[];
     for(let r=headerRow+1; r<=R; r++){
       const name = get(r,3);          // col D
@@ -749,17 +749,22 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         break;
       }
     }
-    // ---- otras cajas fuera del saldo total (Caja Terceros = Insigni · En Otras Monedas = Sable Tech) ----
+    // ---- bloques de abajo:
+    //   "Caja Terceros" (Insigni BPX) -> caja de terceros, NO suma al saldo total
+    //   "En Otras Monedas" (Sable Tech, MXN->CLP) -> SÍ es caja del grupo: entra como empresa y suma al total
     const otras=[];
     for(let r=headerRow+1; r<=R; r++){
       const c=get(r,2); if(typeof c!=="string") continue;
-      let tag=null;
-      if(/caja\s+terceros/i.test(c)) tag="Caja terceros";
-      else if(/otras\s+monedas/i.test(c)) tag="Otras monedas";
-      if(tag){
-        for(let rr=r+1; rr<=Math.min(R,r+3); rr++){
-          const nm=get(rr,3), tot=get(rr,11);
-          if(typeof nm==="string" && nm.trim()!=="" && typeof tot==="number"){ otras.push({name:cleanName(nm), total:tot, tag:tag}); break; }
+      let kind=null;
+      if(/caja\s+terceros/i.test(c)) kind="terceros";
+      else if(/otras\s+monedas/i.test(c)) kind="moneda";
+      if(!kind) continue;
+      for(let rr=r+1; rr<=Math.min(R,r+3); rr++){
+        const nm=get(rr,3), tot=get(rr,11);
+        if(typeof nm==="string" && nm.trim()!=="" && typeof tot==="number"){
+          if(kind==="terceros") otras.push({name:cleanName(nm), total:tot, tag:"Caja terceros"});
+          else { companies.push({name:cleanName(nm), total:tot, obs:"", mx:true}); grandTotal += tot; }
+          break;
         }
       }
     }
@@ -870,6 +875,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // join companies by name (union, current order first)
     const baseMap = {}; base.companies.forEach(c=>baseMap[c.name]=c.total);
     const currMap = {}; curr.companies.forEach(c=>currMap[c.name]=c.total);
+    // empresas cuya caja viene en moneda extranjera (convertida a CLP), p.ej. Sable Tech en MXN
+    const mxNames = new Set();
+    curr.companies.forEach(c=>{ if(c.mx) mxNames.add(c.name); });
+    base.companies.forEach(c=>{ if(c.mx) mxNames.add(c.name); });
     // observaciones: manuales (se escriben aquí y quedan guardadas). Solo aplican de un día al siguiente:
     const iC=ORDER.indexOf(cKey), iB=ORDER.indexOf(bKey);
     const consecutivo = (iC>=0 && iB===iC+1);   // la "anterior" es el día inmediatamente previo a la "actual"
@@ -929,9 +938,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       const savedObs = consecutivo ? (OBS[obsKey(cKey, r.name)] || "") : "";
       const obsCls = savedObs ? "obs tag" : "obs";
       const hasDetail = curr.accounts.some(a=>matchCo(r.name, a.co));
+      const mxTag = mxNames.has(r.name) ? '<span class="row-tag">MXN → CLP</span>' : '';
       const nameCell = hasDetail
-        ? `<td class="l co-link" title="Ver detalle por banco de ${r.name}" data-detail="${r.name.replace(/"/g,'&quot;')}">${r.name}<span class="chev">▸</span></td>`
-        : `<td class="l" title="${r.name}">${r.name}</td>`;
+        ? `<td class="l co-link" title="Ver detalle por banco de ${r.name}" data-detail="${r.name.replace(/"/g,'&quot;')}">${r.name}<span class="chev">▸</span>${mxTag}</td>`
+        : `<td class="l" title="${r.name}">${r.name}${mxTag}</td>`;
       return `<tr>
         ${nameCell}
         <td data-label="${base.label}">${clpPlain(r.base)}</td>
@@ -948,7 +958,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // filas de "otras cajas" (fuera del saldo total) al final de la tabla
     let otrasBody = "";
     if(otrasList.length){
-      otrasBody = `<tr class="grp-sep"><td class="l" colspan="7">Otras cajas <span class="grp-hint">· fuera del saldo total</span></td></tr>` +
+      otrasBody = `<tr class="grp-sep"><td class="l" colspan="7">Cajas de terceros <span class="grp-hint">· no suman al saldo total</span></td></tr>` +
         otrasList.map(o=>{
           const b=baseOtras[o.name]||0, a=currOtras[o.name]||0, v=a-b, eq=v===0, pos=v>0, vcls=eq?"eq":(pos?"pos":"neg");
           const barW=Math.min(90,Math.round(Math.abs(v)/maxAbs*90))+"px";
@@ -1014,7 +1024,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     if(curr.dolar!=null) dolarLine.push(`${curr.label}: $${curr.dolar.toLocaleString("es-CL",{minimumFractionDigits:2,maximumFractionDigits:2})}`);
     $("#footNote").innerHTML =
       `* Saldo total CLP + USD + FFMM/DAP. Dólar observado — ${dolarLine.join("  ·  ")}.<br>`+
-      (otrasList.length ? `↳ Las "otras cajas" (Insigni terceros, Sable Tech en moneda extranjera) se muestran aparte y <b>no</b> se suman al saldo total.<br>` : "")+
+      (mxNames.size ? `↳ El saldo total <b>incluye</b> la caja en moneda extranjera (${[...mxNames].join(", ")}, MXN convertida a CLP). Las 3 cajas de arriba vienen calculadas del Excel y <b>no</b> la incluyen.<br>` : "")+
+      (otrasList.length ? `↳ Las cajas de terceros se muestran aparte y <b>no</b> suman al saldo total.<br>` : "")+
       `💡 Haz clic en el nombre de una empresa (▸) para ver el detalle por banco y cuenta. `+
       (consecutivo
         ? `Escribe las Observaciones directo en la celda; quedan guardadas para esa fecha.`
