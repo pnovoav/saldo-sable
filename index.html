@@ -313,7 +313,17 @@
   body.viewer #drop, body.viewer #lbChange, body.viewer #placeholder, body.viewer #loadedBar{display:none!important}
   body.viewer .lb-file:after{content:" · solo lectura";color:var(--muted);font-weight:600}
   /* gráfico deuda */
-  .chart-card{padding:16px 18px 12px;margin-bottom:20px}
+  .chart-card{padding:16px 18px 12px;margin-bottom:20px;position:relative}
+  .chart-tip{position:absolute;display:none;pointer-events:none;background:#fff;border:1px solid #e3e0f2;border-radius:10px;
+    box-shadow:0 6px 20px rgba(20,10,60,.18);padding:8px 10px;font-size:11.5px;z-index:5;min-width:150px;max-width:310px}
+  .chart-tip .tip-t{font-weight:700;color:var(--navy);margin-bottom:5px;font-size:11px}
+  .chart-tip .tip-r{display:flex;align-items:center;gap:6px;margin-top:3px;white-space:nowrap}
+  .chart-tip .tip-r i{width:8px;height:8px;border-radius:50%;flex:none}
+  .chart-tip .tip-n{color:var(--muted);flex:1;margin-right:10px;overflow:hidden;text-overflow:ellipsis}
+  .chart-tip b{color:var(--ink)}
+  .hband{fill:transparent;cursor:crosshair}
+  .hguide{stroke:#b9aee8;stroke-width:1;stroke-dasharray:3 3}
+  .hdot{stroke:#fff;stroke-width:2}
   .chart-title{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px}
   .chart-title span{color:var(--muted);font-weight:500}
   .deuda-svg{width:100%;height:auto;display:block;overflow:visible}
@@ -889,7 +899,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         <div class="k-val ${totV>=0?'k-up':'k-down'}">${totV>=0?'▲ ':'▼ '}${clp(totV)}</div>
         <div class="k-sub ${totV>=0?'k-up':'k-down'}">${totV>=0?'+':''}${pct(totC,totB).toFixed(1)}% · ${base.label} → ${curr.label}</div></div>
       <div class="kpi"><div class="k-label">Empresas</div>
-        <div class="k-val"><span class="k-up">▲ ${ups}</span> &nbsp; <span class="k-down">▼ ${downs}</span>${eqs?' &nbsp; <span class="k-eq">= '+eqs+'</span>':''}</div>
+        <div class="k-val"><span class="k-up">▲ ${ups}</span>${eqs?' &nbsp; <span class="k-eq">= '+eqs+'</span>':''} &nbsp; <span class="k-down">▼ ${downs}</span></div>
         <div class="k-sub">${rows.length} razones sociales</div></div>`;
 
     // ---- 3 cajas resumen (esquina superior derecha del Excel) ----
@@ -1337,6 +1347,38 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const ticks=[]; for(let v=nmin; v<=nmax+step*0.5; v+=step) ticks.push(Math.round(v));
     return {nmin,nmax,ticks};
   }
+  // tooltip al pasar el cursor (o tocar) sobre el gráfico: muestra el saldo de ese período
+  function chartHover(cardEl, items){
+    const svg=cardEl.querySelector("svg"); if(!svg) return;
+    const tip=cardEl.querySelector(".chart-tip"); if(!tip) return;
+    const guide=svg.querySelector(".hguide"), hdots=svg.querySelectorAll(".hdot");
+    const hide=()=>{ tip.style.display="none"; if(guide) guide.style.display="none"; hdots.forEach(d=>d.style.display="none"); };
+    const show=(i,ev)=>{
+      const it=items[i]; if(!it) return;
+      tip.innerHTML=`<div class="tip-t">${it.label}</div>`+it.rows.map(r=>
+        `<div class="tip-r"><i style="background:${r.color}"></i><span class="tip-n">${r.name}</span><b>${clp(r.val)}</b></div>`).join("");
+      tip.style.display="block";
+      const rect=cardEl.getBoundingClientRect();
+      let x=ev.clientX-rect.left+14, y=ev.clientY-rect.top-10;
+      if(x+tip.offsetWidth > rect.width-6) x=ev.clientX-rect.left-tip.offsetWidth-14;
+      tip.style.left=Math.max(6,x)+"px";
+      tip.style.top=Math.max(6,Math.min(y, rect.height-tip.offsetHeight-6))+"px";
+      if(guide){ guide.setAttribute("x1",it.x); guide.setAttribute("x2",it.x); guide.style.display="block"; }
+      hdots.forEach((d,k)=>{
+        const p=it.rows[k];
+        if(p && p.y!=null){ d.setAttribute("cx",it.x); d.setAttribute("cy",p.y); d.setAttribute("fill",p.color); d.style.display="block"; }
+        else d.style.display="none";
+      });
+    };
+    svg.querySelectorAll(".hband").forEach(b=>{
+      const i=+b.dataset.i;
+      ["mouseenter","mousemove","click"].forEach(evt=>b.addEventListener(evt, ev=>show(i,ev)));
+      b.addEventListener("touchstart", ev=>{ const t=ev.touches[0]; if(t) show(i,{clientX:t.clientX,clientY:t.clientY}); }, {passive:true});
+    });
+    svg.addEventListener("mouseleave", hide);
+    cardEl.addEventListener("mouseleave", hide);
+  }
+
   function renderCashChart(){
     const el=$("#dashCashChart"); if(!el) return;
     const keys=ORDER.slice().reverse();   // cronológico: más antiguo → más reciente
@@ -1380,6 +1422,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const cap=`Del <b>${pts[0].label}</b> al <b>${last.label}</b> (${n} días). `+
       `Variación del período: <b>${delta>=0?'+':''}${clp(delta)}</b> (${delta>=0?'+':''}${pctd.toFixed(1)}%). `+
       `Máximo <b>${clp(maxV)}</b> · mínimo <b>${clp(minV)}</b>.`;
+    // bandas invisibles para el hover + guía vertical + punto resaltado
+    const bwid=(W-padL-padR)/Math.max(1,n-1);
+    let bands="";
+    pts.forEach((p,i)=>{ const cx=X(i);
+      bands+=`<rect class="hband" data-i="${i}" x="${(cx-bwid/2).toFixed(1)}" y="${padT}" width="${bwid.toFixed(1)}" height="${(baseY-padT).toFixed(1)}"/>`; });
+    const hov=`<line class="hguide" x1="0" x2="0" y1="${padT}" y2="${baseY}" style="display:none"/><circle class="hdot" r="4.5" style="display:none"/>`;
     el.classList.remove("hidden");
     el.innerHTML=`
       <div class="chart-title">Evolución de caja histórica <span>· saldo total disponible por día</span></div>
@@ -1388,9 +1436,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           <stop offset="0" stop-color="#2C1096" stop-opacity="0.22"/>
           <stop offset="1" stop-color="#2C1096" stop-opacity="0.02"/>
         </linearGradient></defs>
-        ${grid}<path class="c-area" d="${dArea}"/><path class="c-line" d="${dLine}"/>${dot}${yl}${xlab}
+        ${grid}<path class="c-area" d="${dArea}"/><path class="c-line" d="${dLine}"/>${dot}${yl}${xlab}${hov}${bands}
       </svg>
+      <div class="chart-tip"></div>
       <div class="chart-cap">${cap}</div>`;
+    chartHover(el, pts.map((p,i)=>({label:p.label, x:X(i).toFixed(1),
+      rows:[{color:"#2C1096", name:"Saldo total", val:p.v, y:Y(p.v).toFixed(1)}]})));
   }
   // ===== Dashboard: evolución por empresa (multi-selección) =====
   const COMP_COLORS=["#2C1096","#e0567a","#1f9d6b","#e8912a","#3a86ff","#c0392b","#8e44ad","#0e9d8f","#d4a017","#2d6cdf","#d15a6e","#0e7c66","#b8860b","#7048c0","#c2477a"];
@@ -1419,7 +1470,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const pick=`<div class="comp-pick"><span class="pick-mini">Empresas:</span>${chips}</div>`;
     // svg
     const W=760,H=236,padL=8,padR=66,padT=18,padB=34;
-    let svg;
+    let svg, hoverItems=null;
     if(!sel.length){
       svg=`<div class="comp-empty">Selecciona una o varias empresas arriba para ver su evolución.</div>`;
     } else {
@@ -1440,10 +1491,20 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         lines+=`<path class="cc-line" style="stroke:${s.col}" d="${d}"/>`; });
       const stepx=Math.max(1,Math.ceil(n/6));
       let xlab=""; keys.forEach((k,i)=>{ if(i%stepx===0||i===n-1){ xlab+=`<text x="${X(i).toFixed(1)}" y="${(H-12).toFixed(1)}" class="c-xl">${SHEETS[k].label.slice(0,5)}</text>`; } });
-      svg=`<svg viewBox="0 0 ${W} ${H}" class="comp-svg">${grid}${lines}${yl}${xlab}</svg>`;
+      // bandas de hover + guía + un punto por empresa seleccionada
+      const baseY2=H-padB, bwid=(W-padL-padR)/Math.max(1,n-1);
+      let bands="";
+      keys.forEach((k,i)=>{ const cx=X(i);
+        bands+=`<rect class="hband" data-i="${i}" x="${(cx-bwid/2).toFixed(1)}" y="${padT}" width="${bwid.toFixed(1)}" height="${(baseY2-padT).toFixed(1)}"/>`; });
+      const hov=`<line class="hguide" x1="0" x2="0" y1="${padT}" y2="${baseY2}" style="display:none"/>`+
+        series.map(()=>`<circle class="hdot" r="4" style="display:none"/>`).join("");
+      hoverItems = keys.map((k,i)=>({label:SHEETS[k].label, x:X(i).toFixed(1),
+        rows: series.map(s=>({color:s.col, name:s.nm, val:s.vals[i], y:Y(s.vals[i]).toFixed(1)}))}));
+      svg=`<svg viewBox="0 0 ${W} ${H}" class="comp-svg">${grid}${lines}${yl}${xlab}${hov}${bands}</svg><div class="chart-tip"></div>`;
     }
     el.classList.remove("hidden");
     el.innerHTML=`<div class="chart-title">Evolución por empresa <span>· elige una o varias (todo el período cargado)</span></div>${pick}${svg}`;
+    if(hoverItems) chartHover(el, hoverItems);
     el.querySelectorAll(".comp-chip").forEach(b=>b.addEventListener("click",()=>{
       const nm=b.getAttribute("data-co");
       if(compSel.has(nm)) compSel.delete(nm); else compSel.add(nm);
