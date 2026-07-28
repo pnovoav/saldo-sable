@@ -1504,11 +1504,17 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   const COMP_COLORS=["#2C1096","#e0567a","#1f9d6b","#e8912a","#3a86ff","#c0392b","#8e44ad","#0e9d8f","#d4a017","#2d6cdf","#d15a6e","#0e7c66","#b8860b","#7048c0","#c2477a"];
   let compSel=null;   // Set de nombres seleccionados (null = aún sin inicializar)
   function allCompanies(){
-    const seen=[]; ORDER.forEach(k=>(SHEETS[k].companies||[]).forEach(c=>{ if(!seen.includes(c.name)) seen.push(c.name); }));
-    const latest={}; (SHEETS[ORDER[0]]?SHEETS[ORDER[0]].companies||[]:[]).forEach(c=>latest[c.name]=c.total);
-    return seen.sort((a,b)=>(latest[b]||0)-(latest[a]||0));   // por saldo más reciente (color/orden estable)
+    // agrupa variantes de una misma empresa por nombre normalizado (norm); display = ortografía más reciente
+    const byKey={};   // key -> display
+    ORDER.forEach(k=>(SHEETS[k].companies||[]).forEach(c=>{ const kk=norm(c.name); if(!byKey[kk]) byKey[kk]=c.name; }));
+    const latest=SHEETS[ORDER[0]]?SHEETS[ORDER[0]].companies||[]:[];
+    const latestTot={};
+    latest.forEach(c=>{ const kk=norm(c.name); byKey[kk]=c.name; latestTot[kk]=(latestTot[kk]||0)+c.total; });  // display canónico = el reciente
+    return Object.keys(byKey).map(kk=>byKey[kk]).sort((a,b)=>(latestTot[norm(b)]||0)-(latestTot[norm(a)]||0));
   }
   function compColor(names,name){ return COMP_COLORS[names.indexOf(name)%COMP_COLORS.length]; }
+  // nombre crudo de la empresa en un día (para buscar su observación con la llave correcta)
+  function rawCoName(k,canon){ const kk=norm(canon); const c=(SHEETS[k].companies||[]).find(x=>norm(x.name)===kk); return c?c.name:canon; }
   function renderCompaniesChart(){
     const el=$("#dashCompChart"); if(!el) return;
     const keys=ORDER.slice().reverse();
@@ -1516,7 +1522,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const names=allCompanies();
     if(compSel===null) compSel=new Set(names.slice(0,3));   // por defecto las 3 de mayor saldo
     const clpM=v=>"$"+Math.round(v/1e6).toLocaleString("es-CL")+"M";
-    const seriesFor=name=>keys.map(k=>{ const c=(SHEETS[k].companies||[]).find(x=>x.name===name); return c?c.total:0; });
+    const seriesFor=name=>{ const kk=norm(name);
+      return keys.map(k=>(SHEETS[k].companies||[]).filter(x=>norm(x.name)===kk).reduce((s,x)=>s+x.total,0)); };
     const sel=names.filter(nm=>compSel.has(nm));
     // chips
     const chips=names.map(nm=>{
@@ -1547,7 +1554,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       series.forEach(s=>{ let d=""; s.vals.forEach((v,i)=>{ d+=(i?"L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1)+" "; });
         lines+=`<path class="cc-line" style="stroke:${s.col}" d="${d}"/>`; });
       const stepx=Math.max(1,Math.ceil(n/6));
-      let xlab=""; keys.forEach((k,i)=>{ if(i%stepx===0||i===n-1){ xlab+=`<text x="${X(i).toFixed(1)}" y="${(H-12).toFixed(1)}" class="c-xl">${SHEETS[k].label.slice(0,5)}</text>`; } });
+      const multiAno = new Set(keys.map(k=>SHEETS[k].label.slice(6,10))).size>1;
+      let xlab=""; keys.forEach((k,i)=>{ if(i%stepx===0||i===n-1){ const L=SHEETS[k].label;
+        const xl=multiAno?(L.slice(0,5)+"-"+L.slice(8,10)):L.slice(0,5);
+        xlab+=`<text x="${X(i).toFixed(1)}" y="${(H-12).toFixed(1)}" class="c-xl">${xl}</text>`; } });
       // bandas de hover + guía + un punto por empresa seleccionada
       const baseY2=H-padB, bwid=(W-padL-padR)/Math.max(1,n-1);
       let bands="";
@@ -1556,7 +1566,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       const hov=`<line class="hguide" x1="0" x2="0" y1="${padT}" y2="${baseY2}" style="display:none"/>`+
         series.map(()=>`<circle class="hdot" r="4" style="display:none"/>`).join("");
       hoverItems = keys.map((k,i)=>({label:SHEETS[k].label, x:X(i).toFixed(1),
-        rows: series.map(s=>({color:s.col, name:s.nm, val:s.vals[i], y:Y(s.vals[i]).toFixed(1), obs:OBS[obsKey(k,s.nm)]||""}))}));
+        rows: series.map(s=>({color:s.col, name:s.nm, val:s.vals[i], y:Y(s.vals[i]).toFixed(1), obs:OBS[obsKey(k,rawCoName(k,s.nm))]||""}))}));
       svg=`<svg viewBox="0 0 ${W} ${H}" class="comp-svg">${grid}${lines}${yl}${xlab}${hov}${bands}</svg><div class="chart-tip"></div>`;
     }
     el.classList.remove("hidden");
