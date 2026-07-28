@@ -320,6 +320,8 @@
   .chart-tip .tip-r{display:flex;align-items:center;gap:6px;margin-top:3px;white-space:nowrap}
   .chart-tip .tip-r i{width:8px;height:8px;border-radius:50%;flex:none}
   .chart-tip .tip-n{color:var(--muted);flex:1;margin-right:10px;overflow:hidden;text-overflow:ellipsis}
+  .chart-tip .tip-obs{font-size:10.5px;color:var(--muted);margin:1px 0 5px 14px;line-height:1.35;
+    padding-left:6px;border-left:2px solid var(--line);font-style:italic;white-space:normal}
   .chart-tip b{color:var(--ink)}
   .hband{fill:transparent;cursor:crosshair}
   .hguide{stroke:#b9aee8;stroke-width:1;stroke-dasharray:3 3}
@@ -1393,7 +1395,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const show=(i,ev)=>{
       const it=items[i]; if(!it) return;
       tip.innerHTML=`<div class="tip-t">${it.label}</div>`+it.rows.map(r=>
-        `<div class="tip-r"><i style="background:${r.color}"></i><span class="tip-n">${r.name}</span><b>${clp(r.val)}</b></div>`).join("");
+        `<div class="tip-r"><i style="background:${r.color}"></i><span class="tip-n">${r.name}</span><b>${clp(r.val)}</b></div>`
+        + (r.obs ? `<div class="tip-obs">${r.obs}</div>` : "")).join("");
       tip.style.display="block";
       const rect=cardEl.getBoundingClientRect();
       let x=ev.clientX-rect.left+14, y=ev.clientY-rect.top-10;
@@ -1554,7 +1557,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       const hov=`<line class="hguide" x1="0" x2="0" y1="${padT}" y2="${baseY2}" style="display:none"/>`+
         series.map(()=>`<circle class="hdot" r="4" style="display:none"/>`).join("");
       hoverItems = keys.map((k,i)=>({label:SHEETS[k].label, x:X(i).toFixed(1),
-        rows: series.map(s=>({color:s.col, name:s.nm, val:s.vals[i], y:Y(s.vals[i]).toFixed(1)}))}));
+        rows: series.map(s=>({color:s.col, name:s.nm, val:s.vals[i], y:Y(s.vals[i]).toFixed(1), obs:OBS[obsKey(k,s.nm)]||""}))}));
       svg=`<svg viewBox="0 0 ${W} ${H}" class="comp-svg">${grid}${lines}${yl}${xlab}${hov}${bands}</svg><div class="chart-tip"></div>`;
     }
     el.classList.remove("hidden");
