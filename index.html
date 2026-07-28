@@ -795,20 +795,32 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       let wb;
       try{ wb = XLSX.read(new Uint8Array(e.target.result), {type:"array"}); }
       catch(err){ alert("No pude leer el archivo 😕\n"+err.message); return; }
-      SHEETS={}; ORDER=[];
+      // MERGE: no resetea. Agrega fechas nuevas, actualiza las repetidas, mantiene el resto.
+      let added=0, updated=0, parsedAny=false;
       wb.SheetNames.forEach(nm=>{
         const parsed = parseSheet(wb.Sheets[nm], nm);
-        if(parsed){ const d=parseDate(parsed.label); parsed.dateObj=d; SHEETS[nm]=parsed; }
+        if(!parsed) return;
+        parsedAny=true;
+        const key = parsed.label;                 // dd-mm-yyyy, consistente con la nube
+        parsed.dateObj = parseDate(parsed.label);
+        if(SHEETS[key]) updated++; else added++;
+        SHEETS[key] = parsed;                      // repetida → se actualiza · nueva → se agrega
+        // importar observaciones del Excel si las trae (sin pisar las que escribiste a mano)
+        (parsed.companies||[]).forEach(c=>{
+          if(c.obs && c.obs.trim()!==""){ const ok=obsKey(key, c.name); if(!OBS[ok]) OBS[ok]=c.obs.trim(); }
+        });
       });
+      if(!parsedAny){ alert("No encontré hojas con la tabla de saldos en este Excel."); return; }
       ORDER = Object.keys(SHEETS).sort((a,b)=>{
         const da=SHEETS[a].dateObj, db=SHEETS[b].dateObj;
         if(da&&db) return db-da;
         return 0;
       });
-      if(!ORDER.length){ alert("No encontré hojas con la tabla de saldos en este Excel."); return; }
       buildSelectors();
       render();
       cloudSaveSaldos();
+      scheduleSaveObs();
+      cloudFlash(`${added} fecha(s) nueva(s), ${updated} actualizada(s) · historia total: ${ORDER.length} días`);
     };
     reader.readAsArrayBuffer(file);
   }
@@ -816,7 +828,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   // ===== Saldos en la nube (fase 2) =====
   function serializeSaldos(){
     const sheets={};
-    Object.keys(SHEETS).forEach(k=>{ const s=SHEETS[k]; sheets[k]={label:s.label,dolar:s.dolar,week:s.week,companies:s.companies,grandTotal:s.grandTotal,accounts:s.accounts,cajas:s.cajas||[],otras:s.otras||[]}; });
+    // el detalle por banco (accounts) solo se guarda para los últimos ~60 días → mantiene el gist bajo 1 MB.
+    // Los días más viejos guardan totales + empresas + cajas (suficiente para tabla, gráficos y observaciones).
+    const newest = (SHEETS[ORDER[0]]||{}).dateObj;
+    Object.keys(SHEETS).forEach(k=>{ const s=SHEETS[k];
+      const recent = newest && s.dateObj && (newest - s.dateObj) <= 60*864e5;
+      sheets[k]={label:s.label,dolar:s.dolar,week:s.week,companies:s.companies,grandTotal:s.grandTotal,
+        accounts:(recent && s.accounts)?s.accounts:[], cajas:s.cajas||[], otras:s.otras||[]};
+    });
     return {order:ORDER.slice(), sheets:sheets, savedAt:(SHEETS[ORDER[0]]?SHEETS[ORDER[0]].label:"")};
   }
   async function cloudSaveSaldos(){
