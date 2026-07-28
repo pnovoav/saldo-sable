@@ -1464,7 +1464,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // etiquetas X (primera, última y unas repartidas)
     const step=Math.max(1,Math.ceil(n/(cashView==="mensual"?8:6)));
     let xlab="";
-    pts.forEach((p,i)=>{ if(i%step===0 || i===n-1){ xlab+=`<text x="${X(i).toFixed(1)}" y="${(H-12).toFixed(1)}" class="c-xl">${p.xl}</text>`; } });
+    pts.forEach((p,i)=>{ if(i%step===0 || i===n-1){ const anc=i===0?'start':(i===n-1?'end':'middle');
+      xlab+=`<text x="${X(i).toFixed(1)}" y="${(H-12).toFixed(1)}" class="c-xl" style="text-anchor:${anc}">${p.xl}</text>`; } });
     // punto final destacado + valor (con pill blanco para que no se enrede con la línea)
     const last=pts[n-1], lx=X(n-1), ly=Y(last.v);
     const lab=clpM(last.v), tw=lab.length*7.2+14, th=18;
@@ -1557,7 +1558,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       const multiAno = new Set(keys.map(k=>SHEETS[k].label.slice(6,10))).size>1;
       let xlab=""; keys.forEach((k,i)=>{ if(i%stepx===0||i===n-1){ const L=SHEETS[k].label;
         const xl=multiAno?(L.slice(0,5)+"-"+L.slice(8,10)):L.slice(0,5);
-        xlab+=`<text x="${X(i).toFixed(1)}" y="${(H-12).toFixed(1)}" class="c-xl">${xl}</text>`; } });
+        const anc=i===0?'start':(i===n-1?'end':'middle');
+        xlab+=`<text x="${X(i).toFixed(1)}" y="${(H-12).toFixed(1)}" class="c-xl" style="text-anchor:${anc}">${xl}</text>`; } });
       // bandas de hover + guía + un punto por empresa seleccionada
       const baseY2=H-padB, bwid=(W-padL-padR)/Math.max(1,n-1);
       let bands="";
