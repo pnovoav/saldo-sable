@@ -1577,25 +1577,34 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     deudaView={level:"year",year:null,month:null};
     renderDeudaChart("#dashDeuda");
   }
-  // banda de KPIs del Dashboard: Caja total · Deuda · Posición neta
+  // banda de KPIs del Dashboard: Caja total · Deuda · Caja neta (la oficial del Excel)
   function renderDashKpis(){
     const el=$("#dashKpis"); if(!el) return;
     const cKey=(ORDER&&ORDER.length)?ORDER[0]:null;
     if(!cKey || !SHEETS[cKey]){ el.classList.add("hidden"); el.innerHTML=""; return; }
-    const caja = SHEETS[cKey].grandTotal||0;
-    const asOf = SHEETS[cKey].dateObj ? isoFromDate(SHEETS[cKey].dateObj) : isoToday();
-    const deuda = (DEBT_DATA&&DEBT_DATA.loans)? DEBT_DATA.loans.reduce((s,l)=>s+debtStatus(l,asOf).saldo,0) : 0;
-    const neta = caja - deuda;
-    const cobertura = deuda>0 ? caja/deuda : null;
+    const s=SHEETS[cKey];
+    const caja = s.grandTotal||0;
+    const asOf = s.dateObj ? isoFromDate(s.dateObj) : isoToday();
+    const deuda = (DEBT_DATA&&DEBT_DATA.loans)? DEBT_DATA.loans.reduce((a,l)=>a+debtStatus(l,asOf).saldo,0) : 0;
+    // caja neta OFICIAL del Excel (descontada deuda con bancos + boletas en garantía)
+    const netaObj = (s.cajas||[]).find(c=>/neta/i.test(c.label));
+    const neta = netaObj ? netaObj.val : (caja - deuda);
+    // variación de la caja neta vs la fecha anterior en ORDER
+    let netaSub = "neta de deuda bancos y boletas en gtía";
+    const bKey = ORDER[1];
+    if(bKey && SHEETS[bKey] && netaObj){
+      const prev=(SHEETS[bKey].cajas||[]).find(c=>c.label===netaObj.label);
+      if(prev){ const dv=neta-prev.val; netaSub = `<span class="${dv>=0?'k-up':'k-down'}">${dv>=0?'▲ +':'▼ '}${clp(dv)}</span> vs ${SHEETS[bKey].label} · neta de deuda y boletas`; }
+    }
     el.classList.remove("hidden");
     el.innerHTML = `
       <div class="kpi"><div class="k-label">Caja total</div><div class="k-val">${clp(caja)}</div>
-        <div class="k-sub">al ${SHEETS[cKey].label}</div></div>
+        <div class="k-sub">al ${s.label}</div></div>
       <div class="kpi"><div class="k-label">Deuda (capital insoluto)</div><div class="k-val k-down">${clp(deuda)}</div>
-        <div class="k-sub">${(DEBT_DATA&&DEBT_DATA.loans?DEBT_DATA.loans.length:0)} créditos</div></div>
-      <div class="kpi kpi-neta"><div class="k-label">Posición neta</div>
+        <div class="k-sub">${(DEBT_DATA&&DEBT_DATA.loans?DEBT_DATA.loans.length:0)} créditos financieros</div></div>
+      <div class="kpi kpi-neta"><div class="k-label">Caja neta</div>
         <div class="k-val ${neta>=0?'k-up':'k-down'}">${clp(neta)}</div>
-        <div class="k-sub">caja − deuda${cobertura!=null?` · la caja cubre ${cobertura.toFixed(1)}× la deuda`:""}</div></div>`;
+        <div class="k-sub">${netaSub}</div></div>`;
   }
 
   // conmutador de pestañas
