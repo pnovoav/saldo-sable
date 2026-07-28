@@ -72,6 +72,7 @@
   .kpi .k-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
   .kpi .k-val{font-size:24px;font-weight:700;margin-top:6px;color:var(--navy)}
   .kpi .k-sub{font-size:12px;margin-top:4px;color:var(--muted)}
+  .kpi-neta{border:1.5px solid var(--navy);box-shadow:0 8px 24px rgba(44,16,150,.18)}
   .cajas-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
   .caja-card{background:var(--card);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow);border:1px solid #eef1f8;border-left:4px solid var(--navy)}
   .caja-card .cj-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;line-height:1.3;min-height:28px}
@@ -568,6 +569,7 @@ c-24 24 -25 27 -22 162 3 135 3 138 28 150 19 10 183 13 737 13 633 0 713 2
   </div><!-- /panelDeuda -->
 
   <div id="panelDashboard" class="panel hidden">
+    <div id="dashKpis" class="kpis hidden"></div>
     <div id="dashCashChart" class="card chart-card hidden"></div>
     <div id="dashCompChart" class="card chart-card hidden"></div>
     <div id="dashDeuda" class="card chart-card hidden"></div>
@@ -1569,10 +1571,31 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   function renderDashboard(){
     const hasData = ORDER && ORDER.length>=1;
     $("#dashEmpty").classList.toggle("hidden", !!hasData);
+    renderDashKpis();
     renderCashChart();
     renderCompaniesChart();
     deudaView={level:"year",year:null,month:null};
     renderDeudaChart("#dashDeuda");
+  }
+  // banda de KPIs del Dashboard: Caja total · Deuda · Posición neta
+  function renderDashKpis(){
+    const el=$("#dashKpis"); if(!el) return;
+    const cKey=(ORDER&&ORDER.length)?ORDER[0]:null;
+    if(!cKey || !SHEETS[cKey]){ el.classList.add("hidden"); el.innerHTML=""; return; }
+    const caja = SHEETS[cKey].grandTotal||0;
+    const asOf = SHEETS[cKey].dateObj ? isoFromDate(SHEETS[cKey].dateObj) : isoToday();
+    const deuda = (DEBT_DATA&&DEBT_DATA.loans)? DEBT_DATA.loans.reduce((s,l)=>s+debtStatus(l,asOf).saldo,0) : 0;
+    const neta = caja - deuda;
+    const cobertura = deuda>0 ? caja/deuda : null;
+    el.classList.remove("hidden");
+    el.innerHTML = `
+      <div class="kpi"><div class="k-label">Caja total</div><div class="k-val">${clp(caja)}</div>
+        <div class="k-sub">al ${SHEETS[cKey].label}</div></div>
+      <div class="kpi"><div class="k-label">Deuda (capital insoluto)</div><div class="k-val k-down">${clp(deuda)}</div>
+        <div class="k-sub">${(DEBT_DATA&&DEBT_DATA.loans?DEBT_DATA.loans.length:0)} créditos</div></div>
+      <div class="kpi kpi-neta"><div class="k-label">Posición neta</div>
+        <div class="k-val ${neta>=0?'k-up':'k-down'}">${clp(neta)}</div>
+        <div class="k-sub">caja − deuda${cobertura!=null?` · la caja cubre ${cobertura.toFixed(1)}× la deuda`:""}</div></div>`;
   }
 
   // conmutador de pestañas
