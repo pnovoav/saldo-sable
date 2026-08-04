@@ -123,6 +123,10 @@
   tfoot td{padding:15px 14px;background:linear-gradient(180deg,#eef2fb,#e6ebf8);font-weight:800;color:var(--navy);
     text-align:right;border-top:2px solid #d5ddf0;font-size:15px}
   tfoot td.l{text-align:left}
+  /* fila TOTAL de Saldos (va como fila normal para que las cajas de terceros queden debajo) */
+  #tableCard .tot-row td{padding:15px 14px;background:linear-gradient(180deg,#eef2fb,#e6ebf8);font-weight:800;
+    color:var(--navy);text-align:right;border-top:2px solid #d5ddf0;font-size:15px}
+  #tableCard .tot-row td.l{text-align:left}
   .foot-note{font-size:12px;color:rgba(255,255,255,.58);margin-top:14px;padding:0 4px;line-height:1.6}
   .brand-foot{text-align:center;color:rgba(255,255,255,.55);font-size:11.5px;margin-top:34px;letter-spacing:.4px}
   .brand-foot b{color:#fff;font-weight:700}
@@ -286,6 +290,11 @@
     #tableCard tfoot td::before, #deudaCard tfoot td::before{color:var(--navy);font-weight:700}
     #tableCard tfoot td.l, #deudaCard tfoot td.l{display:block;padding:0 0 6px;font-size:15px}
     #tableCard tfoot td.l::before, #deudaCard tfoot td.l::before{display:none}
+    #tableCard .tot-row{display:block;padding:14px 16px;background:linear-gradient(180deg,#eef2fb,#e6ebf8)}
+    #tableCard .tot-row td{background:none;font-weight:800;color:var(--navy);font-size:14px}
+    #tableCard .tot-row td::before{color:var(--navy);font-weight:700}
+    #tableCard .tot-row td.l{display:block;padding:0 0 6px;font-size:15px}
+    #tableCard .tot-row td.l::before{display:none}
   }
 
   /* Login / cloud */
@@ -1010,15 +1019,16 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
           <th>Tendencia</th>
           <th class="l">Observaciones${consecutivo?'':' <span class="th-hint">· solo día a día</span>'}</th>
         </tr></thead>
-        <tbody>${body}${otrasBody}</tbody>
-        <tfoot><tr>
+        <tbody>${body}
+        <tr class="tot-row">
           <td class="l">TOTAL</td>
           <td data-label="${base.label}">${clpPlain(totB)}</td>
           <td data-label="${curr.label}">${clpPlain(totC)}</td>
           <td data-label="Variación" class="${totV>=0?'k-up':'k-down'}">${totV>=0?'+':''}${clpPlain(totV)}</td>
           <td data-label="Var.%" class="${totV>=0?'k-up':'k-down'}">${totV>=0?'+':''}${pct(totC,totB).toFixed(1)}%</td>
           <td></td><td></td>
-        </tr></tfoot>
+        </tr>
+        ${otrasBody}</tbody>
       </table>`;
 
     // observaciones persistence
