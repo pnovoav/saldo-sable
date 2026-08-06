@@ -1521,16 +1521,22 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   // historia de caja embebida (cierre de cada mes, nov-2024 → jul-2026, sacada de los Excel diarios)
   const CASH_HISTORY=[{d:"2024-11-28",v:13026904786},{d:"2024-12-31",v:12424927254},{d:"2025-01-31",v:5950091731},{d:"2025-02-28",v:5536322369},{d:"2025-03-31",v:5032090443},{d:"2025-04-30",v:3861122038},{d:"2025-05-30",v:4242156064},{d:"2025-06-30",v:3827654618},{d:"2025-07-31",v:6227443730},{d:"2025-08-29",v:6442756674},{d:"2025-09-30",v:6587251708},{d:"2025-10-30",v:5405330925},{d:"2025-11-28",v:5216899039},{d:"2025-12-31",v:5429340957},{d:"2026-01-30",v:4060813612},{d:"2026-02-27",v:3576527520},{d:"2026-03-31",v:3576285476},{d:"2026-04-30",v:3474805541},{d:"2026-05-29",v:3480846148},{d:"2026-06-30",v:4521673686},{d:"2026-07-27",v:4626588107}];
   let cashView="mensual";
+  // fecha tope del Dashboard = la "Fecha actual" seleccionada (los gráficos cortan ahí)
+  function dashCutoff(){
+    const k=$("#selCurr")?$("#selCurr").value:null;
+    return (k && SHEETS[k] && SHEETS[k].dateObj) ? SHEETS[k].dateObj : null;
+  }
   function cashPoints(){
+    const cut=dashCutoff(), cutIso=cut?isoFromDate(cut):null;
     if(cashView==="diario"){
-      const ks=ORDER.slice().reverse().filter(k=>SHEETS[k]);
+      const ks=ORDER.slice().reverse().filter(k=>SHEETS[k] && (!cut || (SHEETS[k].dateObj && SHEETS[k].dateObj<=cut)));
       const multiAno = new Set(ks.map(k=>SHEETS[k].label.slice(6,10))).size>1;   // ¿el rango cruza años?
       return ks.map(k=>{ const L=SHEETS[k].label;
         return {label:L, xl: multiAno ? (L.slice(0,5)+"-"+L.slice(8,10)) : L.slice(0,5), v:SHEETS[k].grandTotal||0}; });
     }
     // mensual: historia embebida + sobrescribe un mes solo si el día subido es MÁS reciente que el cierre embebido
-    const map={}; CASH_HISTORY.forEach(x=>{ map[x.d.slice(0,7)]={d:x.d, v:x.v}; });
-    ORDER.forEach(k=>{ const s=SHEETS[k]; if(!s||!s.dateObj) return; const iso=isoFromDate(s.dateObj), m=iso.slice(0,7), cur=map[m]; if(!cur || iso>cur.d) map[m]={d:iso, v:s.grandTotal||0}; });
+    const map={}; CASH_HISTORY.forEach(x=>{ if(cutIso && x.d>cutIso) return; map[x.d.slice(0,7)]={d:x.d, v:x.v}; });
+    ORDER.forEach(k=>{ const s=SHEETS[k]; if(!s||!s.dateObj) return; const iso=isoFromDate(s.dateObj); if(cutIso && iso>cutIso) return; const m=iso.slice(0,7), cur=map[m]; if(!cur || iso>cur.d) map[m]={d:iso, v:s.grandTotal||0}; });
     return Object.keys(map).sort().map(m=>{ const mo=+m.slice(5,7); return {label:_MES[mo-1]+" "+m.slice(0,4), xl:_MES[mo-1]+"-"+m.slice(2,4), v:map[m].v}; });
   }
   function renderCashChart(){
@@ -1621,7 +1627,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   function rawCoName(k,canon){ const kk=norm(canon); const c=(SHEETS[k].companies||[]).find(x=>norm(x.name)===kk); return c?c.name:canon; }
   function renderCompaniesChart(){
     const el=$("#dashCompChart"); if(!el) return;
-    const keys=ORDER.slice().reverse();
+    const cut=dashCutoff();
+    const keys=ORDER.slice().reverse().filter(k=>!cut || (SHEETS[k].dateObj && SHEETS[k].dateObj<=cut));
     if(keys.length<2){ el.classList.add("hidden"); return; }
     const names=allCompanies();
     if(compSel===null) compSel=new Set(names.slice(0,3));   // por defecto las 3 de mayor saldo
