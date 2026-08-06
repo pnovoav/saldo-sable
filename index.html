@@ -55,6 +55,7 @@
 
   /* Controls */
   .controls{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-bottom:20px}
+  .tab-date{margin-bottom:14px}   /* selector de fecha espejo en Deuda/Dashboard */
   .ctrl{display:flex;flex-direction:column;gap:6px}
   .ctrl label{font-size:12px;font-weight:600;color:rgba(255,255,255,.72);text-transform:uppercase;letter-spacing:.5px}
   select{
@@ -183,6 +184,7 @@
     display:flex;align-items:center;justify-content:center;padding:24px;z-index:50;
     opacity:0;pointer-events:none;transition:.18s}
   .overlay.show{opacity:1;pointer-events:auto}
+  body.modal-lock{overflow:hidden}   /* con modal abierto, el fondo no se desplaza */
   .modal{background:var(--card);border-radius:18px;max-width:760px;width:100%;max-height:88vh;overflow:auto;
     box-shadow:0 24px 80px rgba(20,28,54,.4);transform:translateY(10px) scale(.985);transition:.18s}
   .overlay.show .modal{transform:none}
@@ -352,6 +354,10 @@
   .deuda-svg .cxl2{fill:var(--muted);font-size:9.5px;text-anchor:middle}
   .chart-bc{font-size:11.5px;margin-bottom:10px;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
   .crumb{cursor:pointer;color:var(--navy);font-weight:600} .crumb:hover{text-decoration:underline}
+  /* toggle Solo pendiente / Todo el crédito (Perfil de Deuda) */
+  .mode-tog{display:inline-flex;gap:4px;margin-left:10px;vertical-align:middle}
+  .mode-btn{font:inherit;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid #d9def0;background:#fff;color:#5a6285;cursor:pointer}
+  .mode-btn.on{background:var(--navy);color:#fff;border-color:var(--navy)}
   .crumb-btn{cursor:pointer;color:var(--navy);font-weight:700;font-size:11.5px;background:#efecfb;border:1px solid #cfc6ef;
     border-radius:8px;padding:5px 12px;display:inline-flex;align-items:center;gap:4px;line-height:1;transition:background .12s}
   .crumb-btn:hover{background:#e0d9f6;border-color:#b3a6e6}
@@ -570,6 +576,9 @@ c-24 24 -25 27 -22 162 3 135 3 138 28 150 19 10 183 13 737 13 633 0 713 2
   </div><!-- /panelSaldos -->
 
   <div id="panelDeuda" class="panel hidden">
+    <div class="controls tab-date">
+      <div class="ctrl"><label>Fecha de análisis</label><select id="selDeuda" class="sel-sync"></select></div>
+    </div>
     <div id="deudaAsof" class="asof-bar"></div>
     <div id="deudaKpis" class="kpis"></div>
     <div id="deudaChart" class="card chart-card hidden"></div>
@@ -578,6 +587,9 @@ c-24 24 -25 27 -22 162 3 135 3 138 28 150 19 10 183 13 737 13 633 0 713 2
   </div><!-- /panelDeuda -->
 
   <div id="panelDashboard" class="panel hidden">
+    <div class="controls tab-date">
+      <div class="ctrl"><label>Fecha de análisis</label><select id="selDash" class="sel-sync"></select></div>
+    </div>
     <div id="dashKpis" class="kpis hidden"></div>
     <div id="dashCashChart" class="card chart-card hidden"></div>
     <div id="dashCompChart" class="card chart-card hidden"></div>
@@ -659,6 +671,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   const clp = n => (n<0?"-":"") + "$" + Math.round(Math.abs(n)).toLocaleString("es-CL");
   const clpPlain = n => Math.round(n).toLocaleString("es-CL");
   const pct = (a,b) => b===0 ? (a===0?0:100) : (a-b)/Math.abs(b)*100;
+  // texto del % de variación: desde base 0 no hay porcentaje que valga → "n.a."
+  const pctTxt = (a,b) => b===0 ? (a===0?"=":"n.a.") : ((a-b>=0?"+":"")+pct(a,b).toFixed(1)+"%");
   const usd2 = n => n.toLocaleString("es-CL",{minimumFractionDigits:2,maximumFractionDigits:2});
 
   // --- fuzzy company matching between main table and bank-detail section ---
@@ -696,10 +710,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const R = range.e.r;
 
     let dolar=null, week=null, headerRow=-1;
+    const fx={};   // paridades del día: MXN/COP/PEN/UF → CLP (celdas D7-D9 del Excel)
     // scan column C (idx 2) and D (idx 3) for markers
     for(let r=range.s.r; r<=R; r++){
       const c = get(r,2), d = get(r,3);
       if(typeof c==="string" && c.toLowerCase().includes("dólar")) dolar = get(r,3);
+      if(typeof c==="string" && /^(MXN|COP|PEN|UF)$/i.test(c.trim())){
+        const v=get(r,3); if(typeof v==="number") fx[c.trim().toUpperCase()]=v;
+      }
       if(typeof d==="string" && d.toLowerCase().includes("semana")) week = cleanName(d);
       if(typeof c==="string" && c.trim().toUpperCase()==="RUT" &&
          typeof d==="string" && d.toLowerCase().includes("razón")) headerRow = r;
@@ -788,7 +806,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // total robusto = cuerpo (CLP) + filiales en moneda extranjera. No depende de cómo el Excel arme su "SALDO TOTAL".
     const grandTotal = mainSum + foreignSum;
 
-    return {label:cleanName(sheetName), dolar:dolar!=null?Number(dolar):null, week:week,
+    return {label:cleanName(sheetName), dolar:dolar!=null?Number(dolar):null, week:week, fx:fx,
             companies:companies, grandTotal:grandTotal, accounts:accounts, cajas:cajas, otras:otras};
   }
 
@@ -845,7 +863,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const newest = (SHEETS[ORDER[0]]||{}).dateObj;
     Object.keys(SHEETS).forEach(k=>{ const s=SHEETS[k];
       const recent = newest && s.dateObj && (newest - s.dateObj) <= 60*864e5;
-      sheets[k]={label:s.label,dolar:s.dolar,week:s.week,companies:s.companies,grandTotal:s.grandTotal,
+      sheets[k]={label:s.label,dolar:s.dolar,week:s.week,fx:s.fx||{},companies:s.companies,grandTotal:s.grandTotal,
         accounts:(recent && s.accounts)?s.accounts:[], cajas:s.cajas||[], otras:s.otras||[]};
     });
     return {order:ORDER.slice(), sheets:sheets, savedAt:(SHEETS[ORDER[0]]?SHEETS[ORDER[0]].label:"")};
@@ -875,6 +893,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     $("#selBase").innerHTML = html;
     $("#selCurr").value = ORDER[0];                      // más reciente (punto 2: 2 días mayores auto)
     $("#selBase").value = ORDER[1] || ORDER[0];          // el anterior
+    // selectores espejo de "Fecha actual" en Deuda y Dashboard (las 3 pestañas comparten la fecha)
+    ["#selDeuda","#selDash"].forEach(id=>{ const s=$(id); if(s){ s.innerHTML=html; s.value=$("#selCurr").value; } });
     applyDateGuards();
     $("#controls").classList.remove("hidden");
     $("#placeholder").classList.add("hidden");
@@ -892,7 +912,12 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const cd=(SHEETS[$("#selCurr").value]||{}).dateObj, bd=(SHEETS[$("#selBase").value]||{}).dateObj;
     if(cd && bd && bd>cd){ $("#selBase").value = $("#selCurr").value; }  // si quedó mayor, la ajusto a la actual
     applyDateGuards();
+    // mantener los selectores espejo (Deuda/Dashboard) apuntando a la misma fecha
+    ["#selDeuda","#selDash"].forEach(id=>{ const s=$(id); if(s && s.value!==$("#selCurr").value) s.value=$("#selCurr").value; });
     render();
+    // si otra pestaña está a la vista, re-renderizarla con la nueva fecha
+    if(!$("#panelDeuda").classList.contains("hidden")) renderDeuda();
+    if(!$("#panelDashboard").classList.contains("hidden")) renderDashboard();
   }
 
   function obsKey(currKey, name){ return "obs::"+SHEETS[currKey].label+"::"+name; }
@@ -910,32 +935,35 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     if(!cKey||!bKey) return;
     const curr = SHEETS[cKey], base = SHEETS[bKey];
 
-    // join companies by name (union, current order first)
-    const baseMap = {}; base.companies.forEach(c=>baseMap[c.name]=c.total);
-    const currMap = {}; curr.companies.forEach(c=>currMap[c.name]=c.total);
-    // filiales cuya caja viene en moneda extranjera (convertida a CLP): nombre -> moneda (MXN/COP/PEN)
+    // join por nombre canónico (norm): "ICAR" y "I-CAR" son la misma empresa aunque cambie la grafía
+    const canon = {};                    // key canónica -> nombre a mostrar (prefiere la grafía de la fecha actual)
+    const baseMap = {}, currMap = {};
+    curr.companies.forEach(c=>{ const k=norm(c.name); if(!canon[k]) canon[k]=c.name; currMap[k]=(currMap[k]||0)+c.total; });
+    base.companies.forEach(c=>{ const k=norm(c.name); if(!canon[k]) canon[k]=c.name; baseMap[k]=(baseMap[k]||0)+c.total; });
+    // filiales cuya caja viene en moneda extranjera (convertida a CLP): key -> {cur, name}
     const mxCur = {};
-    base.companies.forEach(c=>{ if(c.mx) mxCur[c.name]=c.cur||null; });
-    curr.companies.forEach(c=>{ if(c.mx) mxCur[c.name]=c.cur||null; });
+    base.companies.forEach(c=>{ if(c.mx) mxCur[norm(c.name)]={cur:c.cur||null, name:c.name}; });
+    curr.companies.forEach(c=>{ if(c.mx) mxCur[norm(c.name)]={cur:c.cur||null, name:c.name}; });
     // observaciones: manuales (se escriben aquí y quedan guardadas). Solo aplican de un día al siguiente:
     const iC=ORDER.indexOf(cKey), iB=ORDER.indexOf(bKey);
     const consecutivo = (iC>=0 && iB===iC+1);   // la "anterior" es el día inmediatamente previo a la "actual"
     const names = []; const seen={};
-    curr.companies.forEach(c=>{ names.push(c.name); seen[c.name]=1; });
-    base.companies.forEach(c=>{ if(!seen[c.name]) names.push(c.name); });
+    curr.companies.forEach(c=>{ const k=norm(c.name); if(!seen[k]){ names.push(k); seen[k]=1; } });
+    base.companies.forEach(c=>{ const k=norm(c.name); if(!seen[k]){ names.push(k); seen[k]=1; } });
 
-    const rows = names.map(n=>{
-      const b = baseMap[n]!=null?baseMap[n]:0;
-      const a = currMap[n]!=null?currMap[n]:0;
-      return {name:n, base:b, curr:a, varv:a-b, pctv:pct(a,b)};
+    const rows = names.map(k=>{
+      // se redondea UNA vez por celda → la suma manual de las filas cuadra con el TOTAL
+      const b = Math.round(baseMap[k]!=null?baseMap[k]:0);
+      const a = Math.round(currMap[k]!=null?currMap[k]:0);
+      return {key:k, name:canon[k], base:b, curr:a, varv:a-b, pctv:pct(a,b)};
     });
     // orden según sortState (encabezados clickeables); default = variación de mayor a menor
     const sdir = sortState.dir==="asc" ? 1 : -1, sk = sortState.key;
     rows.sort((x,y)=> sk==="name" ? x.name.localeCompare(y.name)*sdir : (x[sk]-y[sk])*sdir);
     const maxAbs = Math.max(1, ...rows.map(r=>Math.abs(r.varv)));
 
-    // KPIs
-    const totB = base.grandTotal, totC = curr.grandTotal, totV = totC-totB;
+    // KPIs — totales = suma de las filas ya redondeadas, para que todo cuadre al peso
+    const totB = rows.reduce((s,r)=>s+r.base,0), totC = rows.reduce((s,r)=>s+r.curr,0), totV = totC-totB;
     const ups = rows.filter(r=>r.varv>0).length, downs = rows.filter(r=>r.varv<0).length, eqs = rows.filter(r=>r.varv===0).length;
     $("#kpis").classList.remove("hidden");
     $("#kpis").innerHTML = `
@@ -976,7 +1004,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       const savedObs = consecutivo ? (OBS[obsKey(cKey, r.name)] || "") : "";
       const obsCls = savedObs ? "obs tag" : "obs";
       const hasDetail = curr.accounts.some(a=>matchCo(r.name, a.co));
-      const mxTag = (r.name in mxCur) ? `<span class="row-tag">${mxCur[r.name]||'moneda ext.'} → CLP</span>` : '';
+      const mxTag = mxCur[r.key] ? `<span class="row-tag">${mxCur[r.key].cur||'moneda ext.'} → CLP</span>` : '';
       const nameCell = hasDetail
         ? `<td class="l co-link" title="Ver detalle por banco de ${r.name}" data-detail="${r.name.replace(/"/g,'&quot;')}">${r.name}<span class="chev">▸</span>${mxTag}</td>`
         : `<td class="l" title="${r.name}">${r.name}${mxTag}</td>`;
@@ -985,7 +1013,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         <td data-label="${base.label}">${clpPlain(r.base)}</td>
         <td data-label="${curr.label}">${clpPlain(r.curr)}</td>
         <td data-label="Variación"><span class="var-cell ${vcls}">${eq?'= 0':(pos?'+':'')+clpPlain(r.varv)}</span></td>
-        <td data-label="Var.%" class="pct ${vcls}" style="background:transparent">${eq?'=':(pos?'+':'')+r.pctv.toFixed(1)+'%'}</td>
+        <td data-label="Var.%" class="pct ${vcls}" style="background:transparent">${eq?'=':pctTxt(r.curr,r.base)}</td>
         <td data-label="Tendencia">${eq?'<span class="eq-mark">=</span>':`<div class="bar-wrap"><div class="bar ${pos?'pos':'neg'}" style="width:${barW}"></div></div>`}</td>
         <td data-label="Observaciones">${consecutivo
           ? `<div class="${obsCls}" ${ROLE==="editor"?'contenteditable="true"':''} spellcheck="false" data-key="${obsKey(cKey,r.name).replace(/"/g,'&quot;')}">${savedObs}</div>`
@@ -998,14 +1026,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     if(otrasList.length){
       otrasBody = `<tr class="grp-sep"><td class="l" colspan="7">Cajas de terceros <span class="grp-hint">· no suman al saldo total</span></td></tr>` +
         otrasList.map(o=>{
-          const b=baseOtras[o.name]||0, a=currOtras[o.name]||0, v=a-b, eq=v===0, pos=v>0, vcls=eq?"eq":(pos?"pos":"neg");
+          const b=Math.round(baseOtras[o.name]||0), a=Math.round(currOtras[o.name]||0), v=a-b, eq=v===0, pos=v>0, vcls=eq?"eq":(pos?"pos":"neg");
           const barW=Math.min(90,Math.round(Math.abs(v)/maxAbs*90))+"px";
           return `<tr class="otra-row">
             <td class="l">${o.name}<span class="row-tag">${o.tag}</span></td>
             <td data-label="${base.label}">${clpPlain(b)}</td>
             <td data-label="${curr.label}">${clpPlain(a)}</td>
             <td data-label="Variación"><span class="var-cell ${vcls}">${eq?'= 0':(pos?'+':'')+clpPlain(v)}</span></td>
-            <td data-label="Var.%" class="pct ${vcls}" style="background:transparent">${eq?'=':(pos?'+':'')+pct(a,b).toFixed(1)+'%'}</td>
+            <td data-label="Var.%" class="pct ${vcls}" style="background:transparent">${eq?'=':pctTxt(a,b)}</td>
             <td data-label="Tendencia">${eq?'<span class="eq-mark">=</span>':`<div class="bar-wrap"><div class="bar ${pos?'pos':'neg'}" style="width:${barW}"></div></div>`}</td>
             <td data-label="Observaciones"><span class="obs-off">—</span></td>
           </tr>`;
@@ -1061,13 +1089,19 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const dolarLine = [];
     if(base.dolar!=null) dolarLine.push(`${base.label}: $${base.dolar.toLocaleString("es-CL",{minimumFractionDigits:2,maximumFractionDigits:2})}`);
     if(curr.dolar!=null) dolarLine.push(`${curr.label}: $${curr.dolar.toLocaleString("es-CL",{minimumFractionDigits:2,maximumFractionDigits:2})}`);
+    // paridades usadas para convertir MXN/COP/PEN a CLP (si el día las trae)
+    const fxC=curr.fx||{}, fxParts=[];
+    ["MXN","COP","PEN"].forEach(k=>{ if(typeof fxC[k]==="number") fxParts.push(`1 ${k} = $${fxC[k].toLocaleString("es-CL",{maximumFractionDigits:4})}`); });
     $("#footNote").innerHTML =
       `* Saldo total CLP + USD + FFMM/DAP. Dólar observado — ${dolarLine.join("  ·  ")}.<br>`+
-      (Object.keys(mxCur).length ? `↳ El saldo total <b>incluye</b> las filiales en moneda extranjera (${Object.keys(mxCur).join(", ")}) convertidas a CLP.<br>` : "")+
+      (fxParts.length ? `↳ Paridades del ${curr.label}: ${fxParts.join("  ·  ")} (CLP).<br>` : "")+
+      (Object.keys(mxCur).length ? `↳ El saldo total <b>incluye</b> las filiales en moneda extranjera (${Object.values(mxCur).map(m=>m.name).join(", ")}) convertidas a CLP.<br>` : "")+
       (otrasList.length ? `↳ Las cajas de terceros se muestran aparte y <b>no</b> suman al saldo total.<br>` : "")+
       `💡 Haz clic en el nombre de una empresa (▸) para ver el detalle por banco y cuenta. `+
       (consecutivo
-        ? `Escribe las Observaciones directo en la celda; quedan guardadas para esa fecha.`
+        ? (ROLE==="editor"
+            ? `Escribe las Observaciones directo en la celda; quedan guardadas para esa fecha.`
+            : `Las Observaciones son de solo lectura con tu perfil (visor).`)
         : `Las Observaciones solo aplican al comparar días consecutivos (de un día al siguiente). En rangos más largos no se muestran.`);
   }
 
@@ -1076,6 +1110,10 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const cKey = $("#selCurr").value, bKey = $("#selBase").value;
     const curr = SHEETS[cKey], base = SHEETS[bKey];
     const dolar = curr.dolar || 1;
+    // ¿es una filial en moneda extranjera? → sus cuentas vienen en moneda local y hay que convertirlas
+    const coEntry = curr.companies.find(c=>norm(c.name)===norm(coName));
+    const coCur = (coEntry && coEntry.mx) ? coEntry.cur : null;          // MXN / COP / PEN
+    const coRate = coCur ? ((curr.fx||{})[coCur] || null) : null;        // paridad del día (D7-D9 del Excel)
     const accs = curr.accounts
       .filter(a=>matchCo(coName, a.co))
       .filter(a=>!((a.acct===""||a.acct==="0") && a.saldo===0 && a.total===0));  // quita filas de relleno
@@ -1089,12 +1127,16 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       let bankSub = 0;
       const rowsHtml = banks[bank].map(a=>{
         const isUSD = /USD/i.test(a.acct);
-        const clpEq = isUSD ? a.total*dolar : a.total;
+        // filial extranjera: la cuenta viene en moneda local (MXN/COP/PEN) → convertir con la paridad del día
+        const isLocal = !!coCur && !isUSD;
+        const clpEq = isUSD ? a.total*dolar : (isLocal && coRate ? a.total*coRate : a.total);
         bankSub += clpEq;
         const saldoTxt = isUSD ? "US$ "+usd2(a.saldo) : clpPlain(a.saldo);
         const ffmmTxt  = a.ffmm ? (isUSD ? "US$ "+usd2(a.ffmm) : clpPlain(a.ffmm)) : "—";
         const lcTxt    = a.lcdisp ? clpPlain(a.lcdisp) : "—";
-        const curTag   = isUSD ? '<span class="cur-tag cur-usd">USD</span>' : '<span class="cur-tag cur-clp">CLP</span>';
+        const curTag   = isUSD ? '<span class="cur-tag cur-usd">USD</span>'
+                       : isLocal ? `<span class="cur-tag cur-usd">${coCur}</span>`
+                       : '<span class="cur-tag cur-clp">CLP</span>';
         return `<tr>
           <td class="l" data-label="Cuenta">${a.acct || "—"}${curTag}</td>
           <td data-label="Saldo">${saldoTxt}</td>
@@ -1112,13 +1154,16 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         </table></div>`;
     }).join("");
 
-    // total del día anterior para esta empresa (tabla principal, match exacto por nombre)
-    const baseRow = base.companies.find(c=>c.name===coName);
+    // total del día anterior para esta empresa (tabla principal, match por nombre canónico)
+    const baseRow = base.companies.find(c=>norm(c.name)===norm(coName));
     const baseTot = baseRow ? baseRow.total : 0;
     const diff = grand - baseTot, up = diff>=0;
 
+    let convNote = `Los saldos en dólares se convierten a CLP al dólar observado del día ($${usd2(dolar)}). `;
+    if(coCur && coRate) convNote = `Los saldos en ${coCur} se convierten a CLP a la paridad del día (1 ${coCur} = $${coRate.toLocaleString("es-CL",{maximumFractionDigits:4})} CLP); los USD, al dólar observado ($${usd2(dolar)}). `;
+    else if(coCur && !coRate) convNote = `⚠ Esta filial opera en ${coCur} y esta fecha no trae la paridad ${coCur}→CLP, así que los montos se muestran en moneda local (no comparables con la tabla principal). `;
     const bodyHtml = accs.length
-      ? groupsHtml + `<div class="lc-note">Los saldos en dólares se convierten a CLP al dólar observado del día ($${usd2(dolar)}). ` +
+      ? groupsHtml + `<div class="lc-note">${convNote}` +
         `“LC Disp.” es la línea de crédito disponible. El total reconcilia con el saldo de la tabla principal.</div>`
       : `<div class="empty-d">No se encontró detalle de cuentas para esta empresa en la hoja ${curr.label}.</div>`;
 
@@ -1127,17 +1172,20 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         <div><h2>${coName}</h2><div class="m-sub">Detalle por banco · ${curr.label}</div></div>
         <button class="m-close" id="mClose" aria-label="Cerrar">✕</button>
       </div>
-      <div class="m-tot">
-        <div class="box"><div class="t-lab">Total disponible ${curr.label}</div><div class="t-val">${clp(grand)}</div></div>
+      <div class="m-tot">${(coCur && !coRate)
+        ? `<div class="box"><div class="t-lab">Total en ${coCur} · ${curr.label}</div><div class="t-val">${clpPlain(grand)}</div></div>
+        <div class="box"><div class="t-lab">${base.label} (CLP)</div><div class="t-val">${clp(baseTot)}</div></div>
+        <div class="box"><div class="t-lab">Variación</div><div class="t-val">—</div></div>`
+        : `<div class="box"><div class="t-lab">Total disponible ${curr.label}</div><div class="t-val">${clp(grand)}</div></div>
         <div class="box"><div class="t-lab">${base.label}</div><div class="t-val">${clp(baseTot)}</div></div>
         <div class="box"><div class="t-lab">Variación</div>
-          <div class="t-val ${up?'k-up':'k-down'}">${up?'▲ ':'▼ '}${clp(diff)}</div></div>
+          <div class="t-val ${up?'k-up':'k-down'}">${up?'▲ ':'▼ '}${clp(diff)}</div></div>`}
       </div>
       <div class="m-body">${bodyHtml}</div>`;
-    $("#overlay").classList.add("show");
+    $("#overlay").classList.add("show"); document.body.classList.add("modal-lock");
     $("#mClose").addEventListener("click", closeDetail);
   }
-  function closeDetail(){ $("#overlay").classList.remove("show"); }
+  function closeDetail(){ $("#overlay").classList.remove("show"); document.body.classList.remove("modal-lock"); }
 
   // ---- wiring ----
   const drop = $("#drop"), fileInput = $("#file");
@@ -1157,6 +1205,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   $("#lbChange").addEventListener("click", ()=> fileInput.click());
   $("#selCurr").addEventListener("change", onDateChange);
   $("#selBase").addEventListener("change", onDateChange);
+  // selectores espejo: cambiar la fecha desde Deuda o Dashboard mueve la "Fecha actual" global
+  ["#selDeuda","#selDash"].forEach(id=>{ const s=$(id); if(s) s.addEventListener("change", ()=>{
+    $("#selCurr").value = s.value;
+    onDateChange();
+  }); });
 
   // ========== PESTAÑA DEUDA (amortización automática por fecha) ==========
   let DEBT_DATA = null; // se carga del Worker tras login
@@ -1183,10 +1236,15 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 
   // ===== Deuda: perfil con drill-down (año → mes → día) =====
   let deudaView = {level:"year", year:null, month:null};
+  let deudaMode = "pend";   // "pend" = solo cuotas por pagar (conversa con el KPI) · "all" = crédito completo
   const _MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
   function deudaBuckets(){
     const all=[];
-    (DEBT_DATA.loans||[]).forEach(l=>(l.cuotas||[]).forEach(c=>all.push({f:c.f,cap:c.cap,int:c.int||0,tot:c.tot,emp:l.empresa,det:(l.detalle||"").split(" · ")[0]})));
+    const cut = (deudaMode==="pend") ? debtAsOf() : null;   // en modo pendiente, fuera las cuotas ya pagadas
+    (DEBT_DATA.loans||[]).forEach(l=>(l.cuotas||[]).forEach(c=>{
+      if(cut && c.f<=cut) return;
+      all.push({f:c.f,cap:c.cap,int:c.int||0,tot:c.tot,emp:l.empresa,det:(l.detalle||"").split(" · ")[0]});
+    }));
     if(deudaView.level==="year"){
       const by={}; all.forEach(c=>{const y=c.f.slice(0,4);(by[y]=by[y]||{cap:0,int:0});by[y].cap+=c.cap;by[y].int+=c.int;});
       const items=Object.keys(by).sort().map(y=>({label:y,cap:by[y].cap,int:by[y].int,tot:by[y].cap+by[y].int,drill:y}));
@@ -1209,7 +1267,19 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const el=$(deudaChartTarget); if(!el) return;
     if(!DEBT_DATA||!DEBT_DATA.loans){ el.classList.add("hidden"); return; }
     const b=deudaBuckets();
-    if(!b.items.length){ el.classList.add("hidden"); return; }
+    const wireMode = ()=> el.querySelectorAll("[data-dmode]").forEach(bt=>bt.addEventListener("click",()=>{
+      deudaMode=bt.getAttribute("data-dmode"); renderDeudaChart();
+    }));
+    if(!b.items.length){
+      if(deudaMode==="pend"){   // sin cuotas pendientes: avisar y dejar el botón para ver el crédito completo
+        el.classList.remove("hidden");
+        el.innerHTML=`<div class="chart-title">Perfil de la deuda <span>· pendiente por pagar</span></div>
+          <div class="empty-d">🎉 No quedan cuotas pendientes a esta fecha.</div>
+          <div class="chart-bc"><button type="button" class="crumb-btn" data-dmode="all">Ver el crédito completo</button></div>`;
+        wireMode(); return;
+      }
+      el.classList.add("hidden"); return;
+    }
     const clpM=v=>"$"+Math.round(v/1e6).toLocaleString("es-CL")+"M";
     const items=b.items, n=items.length, maxY=Math.max(...items.map(d=>d.tot),1);
     const isDay=b.level==="day";
@@ -1219,12 +1289,15 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     let bars="",xlab="",hits="";
     items.forEach((d,i)=>{
       const x=padL+i*slot+(slot-bw)/2, capTop=Y(d.cap), totTop=Y(d.tot), cx=padL+i*slot+slot/2;
+      // tooltip nativo: desglose amortización / intereses de la barra
+      const tip=`${d.label}${d.sub?' · '+d.sub:''}: capital ${clp(d.cap)} + intereses ${clp(d.int)} = ${clp(d.tot)}`;
+      bars+=`<g><title>${tip}</title>`;
       bars+=`<rect x="${x.toFixed(1)}" y="${capTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,baseY-capTop).toFixed(1)}" class="cap-bar"/>`;
       bars+=`<rect x="${x.toFixed(1)}" y="${totTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,capTop-totTop).toFixed(1)}" class="int-bar"/>`;
-      bars+=`<text x="${cx.toFixed(1)}" y="${(totTop-5).toFixed(1)}" class="cbl">${clpM(d.tot)}</text>`;
+      bars+=`<text x="${cx.toFixed(1)}" y="${(totTop-5).toFixed(1)}" class="cbl">${clpM(d.tot)}</text></g>`;
       xlab+=`<text x="${cx.toFixed(1)}" y="${(H-(isDay?20:8)).toFixed(1)}" class="cxl">${d.label}</text>`;
       if(isDay && d.sub) xlab+=`<text x="${cx.toFixed(1)}" y="${(H-7).toFixed(1)}" class="cxl2">${d.sub}</text>`;
-      if(b.drillable) hits+=`<rect class="hit" data-drill="${d.drill}" x="${(padL+i*slot).toFixed(1)}" y="${padT}" width="${slot.toFixed(1)}" height="${(baseY-padT).toFixed(1)}"/>`;
+      if(b.drillable) hits+=`<rect class="hit" data-drill="${d.drill}" x="${(padL+i*slot).toFixed(1)}" y="${padT}" width="${slot.toFixed(1)}" height="${(baseY-padT).toFixed(1)}"><title>${tip}</title></rect>`;
     });
     const yl=`<text x="${W-padR+6}" y="${(Y(maxY)+10).toFixed(1)}" class="cyl">${clpM(maxY)}</text><text x="${W-padR+6}" y="${baseY.toFixed(1)}" class="cyl">$0</text>`;
     // breadcrumb: botón "volver" claro + ruta
@@ -1233,13 +1306,20 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     else if(b.level==="day") bc=`<button type="button" class="crumb-btn" data-nav="month">‹ Volver a ${deudaView.year}</button><span class="crumb-link" data-nav="year">todos los años</span><span class="bc-path">${deudaView.year} › <b>${_MES[+deudaView.month-1]}</b></span>`;
     // caption
     const sCap=items.reduce((a,d)=>a+d.cap,0), sInt=items.reduce((a,d)=>a+d.int,0), sTot=sCap+sInt;
+    // % de interés medido sobre el capital (lo estándar), no sobre el total a pagar
+    const pctInt = sCap>0 ? (sInt/sCap*100).toFixed(1) : "0.0";
     let cap;
-    if(b.level==="year") cap=`Total a pagar del crédito: ≈<b>${clp(sTot)}</b> — capital <b>${clp(sCap)}</b> + intereses <b>${clp(sInt)}</b> (${(sInt/sTot*100).toFixed(1)}% intereses).`;
+    if(b.level==="year") cap = (deudaMode==="pend"
+      ? `Pendiente por pagar: ≈<b>${clp(sTot)}</b> — capital <b>${clp(sCap)}</b> + intereses <b>${clp(sInt)}</b> (${pctInt}% de interés sobre el capital pendiente).`
+      : `Crédito completo (pagado + pendiente): ≈<b>${clp(sTot)}</b> — capital <b>${clp(sCap)}</b> + intereses <b>${clp(sInt)}</b> (${pctInt}% de interés sobre el capital).`);
     else cap=`${b.title.split(" · ")[0]}: capital <b>${clp(sCap)}</b> + intereses <b>${clp(sInt)}</b> = <b>${clp(sTot)}</b>.`;
     const hint = b.drillable ? ` <span class="chart-hint">👆 toca una barra para ver el detalle</span>` : "";
+    const modeTog = `<span class="mode-tog">
+      <button type="button" class="mode-btn ${deudaMode==='pend'?'on':''}" data-dmode="pend">Solo pendiente</button>
+      <button type="button" class="mode-btn ${deudaMode==='all'?'on':''}" data-dmode="all">Todo el crédito</button></span>`;
     el.classList.remove("hidden");
     el.innerHTML=`
-      <div class="chart-title">Perfil de la deuda <span>· ${b.title}</span>${hint}</div>
+      <div class="chart-title">Perfil de la deuda <span>· ${b.title}${deudaMode==='pend'?' · solo pendiente':''}</span>${modeTog}${hint}</div>
       ${bc?`<div class="chart-bc">${bc}</div>`:""}
       <div class="chart-legend"><span class="lg"><i class="lg-cap"></i>Amortización (capital)</span><span class="lg"><i class="lg-int"></i>Intereses</span></div>
       <svg viewBox="0 0 ${W} ${H}" class="deuda-svg">${bars}${hits}${yl}${xlab}</svg>
@@ -1255,6 +1335,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       deudaView = lv==="year" ? {level:"year",year:null,month:null} : {level:"month",year:deudaView.year,month:null};
       renderDeudaChart();
     }));
+    wireMode();
   }
   // tasa efectiva (TIR mensual, Newton) desde el flujo real de cuotas
   function loanRate(cuotas){
@@ -1376,7 +1457,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         </table>
         <div class="lc-note">Monto del crédito = ${clp(bruto)} (bruto). Capital insoluto = capital pendiente = ${clp(saldo)}. Desembolsado a la fecha (capital+interés): ${clp(totPag)}. Las cuotas con vencimiento hasta el ${fmtISO(asOf)} se marcan como pagadas. Crédito de ${l.cuotas.length} cuotas · ${l.banco}.</div>
       </div>`;
-    $("#overlay").classList.add("show");
+    $("#overlay").classList.add("show"); document.body.classList.add("modal-lock");
     $("#mClose").addEventListener("click", closeDetail);
   }
 
@@ -1607,7 +1688,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
   // banda de KPIs del Dashboard: Caja total · Deuda · Caja neta (la oficial del Excel)
   function renderDashKpis(){
     const el=$("#dashKpis"); if(!el) return;
-    const cKey=(ORDER&&ORDER.length)?ORDER[0]:null;
+    // respeta la "Fecha actual" seleccionada (igual que Saldos y Deuda); si no hay, usa la más reciente
+    const selK=$("#selCurr") ? $("#selCurr").value : null;
+    const cKey=(selK && SHEETS[selK]) ? selK : ((ORDER&&ORDER.length)?ORDER[0]:null);
     if(!cKey || !SHEETS[cKey]){ el.classList.add("hidden"); el.innerHTML=""; return; }
     const s=SHEETS[cKey];
     const caja = s.grandTotal||0;
@@ -1618,7 +1701,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     const neta = netaObj ? netaObj.val : (caja - deuda);
     // variación de la caja neta vs la fecha anterior en ORDER
     let netaSub = "neta de deuda bancos y boletas en gtía";
-    const bKey = ORDER[1];
+    const bKey = ORDER[ORDER.indexOf(cKey)+1];   // el día anterior a la fecha analizada
     if(bKey && SHEETS[bKey] && netaObj){
       const prev=(SHEETS[bKey].cajas||[]).find(c=>c.label===netaObj.label);
       if(prev){ const dv=neta-prev.val; netaSub = `<span class="${dv>=0?'k-up':'k-down'}">${dv>=0?'▲ +':'▼ '}${clp(dv)}</span> vs ${SHEETS[bKey].label} · neta de deuda y boletas`; }
